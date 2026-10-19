@@ -15,5 +15,6 @@ npm-workspaces monorepo: `packages/app` (Next.js, modules, Effect edge adapters)
 # How to implement — summary (full rules in AGENTS.md, "Planning and executing implementation tasks")
 
 - Split every task into minimal vertical slices: one end-to-end scenario per slice, each shippable on its own (lint, typecheck, tests and build green).
-- Per slice, use TDD: write failing tests for its scenarios (red), implement until green, then refactor. Tests must cover every implemented scenario.
+- Per slice, use TDD: write failing tests for its scenarios (red), implement until green, then refactor. Tests must cover every implemented scenario, and unit tests must cover 100% of the code (`npm test` enforces it).
+- Merge a PR only after every CI check has finished and is green for its latest commit (`gh pr checks <n> --watch`).
 - Never weaken, skip or rewrite tests to make an implementation pass. Fix the code, or stop and explain if the requirement itself was wrong.

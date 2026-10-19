@@ -51,10 +51,12 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 - Start server-only modules with `import "server-only"`. Effect never runs in client components or `@devmentor/ui`.
 - Log through `Effect.log*` (no `console` in server code). Read env only through `parseEnv` / `createOrmConfig`.
 - Implement in minimal vertical slices with a test-first (TDD) loop; see [Planning and executing implementation tasks](#planning-and-executing-implementation-tasks).
-- Write tests: unit/service tests in `__tests__/*.test.ts` (fakes via `Layer.succeed`), DB tests in `__tests__/*.int.test.ts`, e2e in `packages/app/e2e/*.e2e.test.ts`. Every bug fix gets a test that fails without it.
+- Write tests: unit/service tests in `__tests__/*.test.ts(x)` (fakes via `Layer.succeed`, `vi.mock` for infrastructure), DB tests in `__tests__/*.int.test.ts`, e2e in `packages/app/e2e/*.e2e.test.ts`. Every bug fix gets a test that fails without it.
+- Cover **100%** of every new feature with unit tests: lines, branches, functions and statements of all code in `packages/*/src` (schemas, services, actions, routes, pages, components). `npm test` enforces the threshold and fails below it; CI runs the same command. Generated migrations are the only exclusion (they run in `test:int` / `test:e2e`). Don't lower the thresholds, widen `coverage.exclude` or add `/* v8 ignore */` comments to get green; write the missing test or delete the dead code.
 - Follow the style: kebab-case files, named exports (except Next-required defaults), `import type` for types, no `any`, no `enum`, no non-null `!` outside tests. Branches `feat/` `fix/` `chore/` `docs/`, Conventional Commits.
 - Pages that read the database render at request time (`await connection()` first).
-- Before declaring work done: `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass. For UI changes, check the page with agent-browser. Run `npm run test:int` / `test:e2e` when touching the DB layer or user journeys.
+- Before declaring work done: `npm run lint`, `npm run typecheck`, `npm test` (100% coverage) and `npm run build` pass. For UI changes, check the page with agent-browser. Run `npm run test:int` / `test:e2e` when touching the DB layer or user journeys.
+- Before merging a pull request, wait until **every CI check has finished and is green for the PR's latest commit**: run `gh pr checks <number> --watch`, then confirm the checks belong to the current head SHA (`gh pr view <number> --json headRefOid,statusCheckRollup`). A check that is pending, skipped, cancelled or failed, or a green run of an older commit, blocks the merge. Fix the cause and push again; never merge on red or "probably fine".
 
 ## Ask first
 
@@ -70,6 +72,7 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 - Return entities or class instances to the client.
 - Use `new URL("./relative", import.meta.url)` in code Turbopack bundles (keep file-system paths in CLI-only modules such as `mikro-orm.config.ts`).
 - Point `TEST_DATABASE_URL` at a shared or dev database.
+- Merge a pull request whose CI checks are not all finished and green for its latest commit, or bypass CI (admin merge, disabling a job or a check).
 - Weaken, delete, skip (`.skip`/`.only`/`.todo`) or rewrite a test so that a broken implementation passes. Don't loosen assertions, swap in fakes that hide the behavior under test, or catch the failure inside the test. Change a test only when the requirement itself changed, and say so in the run log.
 
 ## Task router
@@ -83,11 +86,12 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 | Env/config | `packages/core/src/config/env.ts`, `packages/app/.env.example` |
 | Public page | `packages/app/src/app/(frontend)/` (Tailwind; layout imports `frontend.css`; shared components in `packages/ui/src/frontend/`) |
 | Admin page | `packages/app/src/app/(backend)/backend/` (shadcn/ui; add components with `cd packages/ui && npx shadcn@latest add <name>`, import `@devmentor/ui/components/<name>`). `(frontend)` and `(backend)` are separate root layouts: link between them with `<a>`, not `<Link>` |
-| Tests | `vitest.config.mts`, `packages/*/src/**/__tests__/`, `packages/app/e2e/` |
+| Tests | `vitest.config.mts` (projects, coverage thresholds), `packages/*/src/**/__tests__/`, `packages/app/e2e/`, test DB setup `packages/db/src/__tests__/test-database.ts` |
+| CI | `.github/workflows/ci.yml` (jobs `lint`, `typecheck`, `unit`, `build`, `integration`, `e2e`); spec `.ai/specs/2026-10-19-ci-pipeline.md` |
 
 ## Commands
 
-- `npm run dev | build | start`, `npm run lint` (ESLint + Prettier check), `npm run format`, `npm run typecheck` (tsc + Effect diagnostics), `npm test` (unit + service), `npm run test:int` (needs `TEST_DATABASE_URL`), `npm run test:e2e` (needs `npm run build` and `TEST_DATABASE_URL` or `E2E_BASE_URL`; Chrome via `npx agent-browser install --with-deps`), `npm run db:migration:create | up | down | list`.
+- `npm run dev | build | start`, `npm run lint` (ESLint + Prettier check), `npm run format`, `npm run typecheck` (tsc + Effect diagnostics), `npm test` (unit + service, with the 100% coverage gate; HTML report in `coverage/`), `npm run test:int` and `npm run test:e2e` (both get an ephemeral, migrated PostgreSQL: `TEST_DATABASE_URL` if set, otherwise a Testcontainers `postgres:17` container, which needs Docker; e2e also needs `npm run build` and Chrome via `npx agent-browser install --with-deps`, or `E2E_BASE_URL` for a running instance), `npm run db:migration:create | up | down | list`.
 - Env files live in `packages/app/` (`.env.local` from `.env.example`); real environment variables override them. Never commit real `.env` files.
 
 # `.ai/` workspace — mandatory conventions

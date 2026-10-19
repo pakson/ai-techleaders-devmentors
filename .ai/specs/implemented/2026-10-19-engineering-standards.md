@@ -304,7 +304,7 @@ export const GET = effectRoute(
 - Auth provider and session model (needed for `RequestContext.user` and ACL): separate spec.
 - Multi-tenancy (organizations): DevMentor's product scope decides this. If needed, add `organization_id` to base properties from the start, because adding it later is expensive.
 - Background jobs/queue (pg-boss on Postgres vs BullMQ/Redis): separate spec when the first async job appears.
-- CI pipeline (GitHub Actions running the definition-of-done gate + a Postgres service): separate spec.
+- CI pipeline: resolved in `.ai/specs/2026-10-19-ci-pipeline.md` (GitHub Actions, Testcontainers PostgreSQL instead of a service container, 100% unit coverage gate).
 
 ## 15. Out of scope
 

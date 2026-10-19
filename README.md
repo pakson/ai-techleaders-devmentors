@@ -46,12 +46,16 @@ npm run dev
 | `npm run dev` / `build` / `start` | Next.js dev server / production build / production server (forwarded to `@devmentor/app`) |
 | `npm run lint` / `format` | ESLint + Prettier check across the repo / apply Prettier |
 | `npm run typecheck` | `tsc --noEmit` + Effect language-service diagnostics in every package |
-| `npm test` | Unit and service tests (Vitest) |
-| `npm run test:int` | DB integration tests against `TEST_DATABASE_URL` (migrations are applied first) |
-| `npm run test:e2e` | Browser tests with agent-browser; starts `next start` (run `npm run build` first) against `TEST_DATABASE_URL`, or uses `E2E_BASE_URL` |
+| `npm test` | Unit and service tests (Vitest); fails below 100% coverage (report in `coverage/`) |
+| `npm run test:int` | DB integration tests against an ephemeral, migrated PostgreSQL: `TEST_DATABASE_URL` if set, otherwise a Testcontainers container (needs Docker) |
+| `npm run test:e2e` | Browser tests with agent-browser; starts `next start` (run `npm run build` first) against the same ephemeral database, or uses `E2E_BASE_URL` |
 | `npm run db:migration:create` | Generate a migration from the entity/schema diff |
 | `npm run db:migration:up` / `down` | Apply / revert migrations |
 | `npm run db:migration:list` | List applied migrations |
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`. Each job is a separate check: `lint`, `typecheck`, `unit (100% coverage)`, `build`, `integration (Testcontainers PostgreSQL)` and `e2e (agent-browser + Testcontainers PostgreSQL)`. A pull request is merged only when all of them are green for its latest commit.
 
 ## Architecture
 
@@ -154,7 +158,7 @@ Environment variables are read from `packages/app/.env*`, the Next.js project di
 | `DB_POOL_MIN` | no | `0` | Minimum pool connections |
 | `DB_POOL_MAX` | no | `10` | Maximum pool connections |
 | `DB_DEBUG` | no | `false` | Log SQL queries |
-| `TEST_DATABASE_URL` | for `test:int` / `test:e2e` | – | Separate PostgreSQL database for tests (never the dev or shared one) |
+| `TEST_DATABASE_URL` | no | – | Separate PostgreSQL database for `test:int` / `test:e2e` (never the dev or shared one). Unset: Testcontainers starts one |
 | `E2E_BASE_URL` | no | – | Run e2e tests against an already running app |
 
 ## Working with AI coding agents

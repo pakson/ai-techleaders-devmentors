@@ -34,8 +34,9 @@ async function waitForServer(url: string, timeoutMs: number): Promise<void> {
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   let server: ChildProcess | undefined;
   let baseUrl = process.env.E2E_BASE_URL;
-  // Fresh evidence directory per run; agent-browser doesn't create it.
-  rmSync(evidenceDir, { recursive: true, force: true });
+  // Fresh screenshots per run (agent-browser doesn't create the directory). Only this subfolder is
+  // cleared: the JUnit reporter already holds test-results/e2e/junit.xml open.
+  rmSync(`${evidenceDir}/screenshots`, { recursive: true, force: true });
   mkdirSync(`${evidenceDir}/screenshots`, { recursive: true });
 
   if (!baseUrl) {

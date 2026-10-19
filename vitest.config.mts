@@ -23,7 +23,7 @@ export default defineConfig({
       include: ["packages/*/src/**/*.{ts,tsx}"],
       // Generated migrations are exercised by `test:int` / `test:e2e`, not unit tests.
       exclude: ["**/__tests__/**", "packages/db/src/migrations/**"],
-      reporter: ["text", ["text", { file: "coverage.txt" }], "html"],
+      reporter: ["text", ["text", { file: "coverage.txt", skipEmpty: true }], "html"],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
     projects: [

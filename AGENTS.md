@@ -52,6 +52,7 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 - Log through `Effect.log*` (no `console` in server code). Read env only through `parseEnv` / `createOrmConfig`.
 - Implement in minimal vertical slices with a test-first (TDD) loop; see [Planning and executing implementation tasks](#planning-and-executing-implementation-tasks).
 - Write tests: unit/service tests in `__tests__/*.test.ts(x)` (fakes via `Layer.succeed`, `vi.mock` for infrastructure), DB tests in `__tests__/*.int.test.ts`, e2e in `packages/app/e2e/*.e2e.test.ts`. Every bug fix gets a test that fails without it.
+- Every e2e scenario ends with `screenshot("<nn>-<scenario>")` (from `e2e/agent-browser.ts`) on the state it asserts, so the run leaves visual evidence; failures are captured automatically. When reporting test results (run log, PR description), cite the evidence: test counts, the coverage summary, and the CI run or artifact.
 - Cover **100%** of every new feature with unit tests: lines, branches, functions and statements of all code in `packages/*/src` (schemas, services, actions, routes, pages, components). `npm test` enforces the threshold and fails below it; CI runs the same command. Generated migrations are the only exclusion (they run in `test:int` / `test:e2e`). Don't lower the thresholds, widen `coverage.exclude` or add `/* v8 ignore */` comments to get green; write the missing test or delete the dead code.
 - Follow the style: kebab-case files, named exports (except Next-required defaults), `import type` for types, no `any`, no `enum`, no non-null `!` outside tests. Branches `feat/` `fix/` `chore/` `docs/`, Conventional Commits.
 - Pages that read the database render at request time (`await connection()` first).
@@ -88,7 +89,8 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 | Public page | `packages/app/src/app/(frontend)/` (Tailwind; layout imports `frontend.css`; shared components in `packages/ui/src/frontend/`) |
 | Admin page | `packages/app/src/app/(backend)/backend/` (shadcn/ui; add components with `cd packages/ui && npx shadcn@latest add <name>`, import `@devmentor/ui/components/<name>`). `(frontend)` and `(backend)` are separate root layouts: link between them with `<a>`, not `<Link>` |
 | Tests | `vitest.config.mts` (projects, coverage thresholds), `packages/*/src/**/__tests__/`, `packages/app/e2e/`, test DB setup `packages/db/src/__tests__/test-database.ts` |
-| CI | `.github/workflows/ci.yml` (jobs `lint`, `typecheck`, `unit`, `build`, `integration`, `e2e`); spec `.ai/specs/implemented/2026-10-19-ci-pipeline.md` |
+| CI | `.github/workflows/ci.yml`, staged by purpose: `lint` + `typecheck` → `unit` + `build` → `integration` → `e2e` (reuses the `build` output); spec `.ai/specs/implemented/2026-10-19-ci-pipeline.md` |
+| Test evidence | `test-results/<unit\|int\|e2e>/junit.xml`, `coverage/` (HTML + `coverage.txt`), `test-results/e2e/screenshots/*.png` + `server.log`; in CI: job summaries and the `unit-evidence` / `integration-evidence` / `e2e-evidence` artifacts |
 
 ## Commands
 

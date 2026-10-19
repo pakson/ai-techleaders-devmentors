@@ -33,3 +33,9 @@ GitHub Actions CI for every PR (lint, typecheck, unit + 100% coverage, build, in
 ## Open issues
 
 - npm warns that install scripts are blocked (`ssh2`, `cpu-features`, `protobufjs`, …). Testcontainers works without them in CI.
+
+## Follow-up: test evidence and stage order (user request)
+
+- Evidence: `reporters: ["default", "junit", "github-actions" (CI only)]`. Each script sets `--outputFile.junit=test-results/<unit|int|e2e>/junit.xml`. Coverage also writes `coverage/coverage.txt`, which the unit job appends to its job summary. e2e: a `screenshot()` helper (agent-browser `screenshot --full`) runs at the end of every scenario, plus an `afterEach` failure screenshot. The global setup recreates `test-results/e2e/screenshots` (agent-browser doesn't create directories, so the first run failed with "No such file or directory") and tees the `next start` output to `server.log`. Checked locally: 3/3 pass and the screenshots show the home page, the dashboard with "Connected", and `{"status":"ok"}`. A temporary, uncommitted wrong assertion produced `failed-renders-the-public-home-page.png`, and the file was restored afterwards.
+- Order: chained with `needs` into lint/typecheck → unit + build → integration → e2e. e2e downloads the `next-build` tarball instead of rebuilding. Job names are unchanged, so the ruleset needed no change.
+- Rules: AGENTS.md now requires an e2e screenshot per scenario and citing evidence when reporting results. The task router has a "Test evidence" row. README and spec are updated.

@@ -2,8 +2,11 @@
 // database (TEST_DATABASE_URL, set by `test-database.ts`), unless E2E_BASE_URL points at an
 // already running instance.
 import { spawn, type ChildProcess } from "node:child_process";
+import { createWriteStream, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { TestProject } from "vitest/node";
+
+import { evidenceDir } from "./agent-browser";
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -31,6 +34,9 @@ async function waitForServer(url: string, timeoutMs: number): Promise<void> {
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   let server: ChildProcess | undefined;
   let baseUrl = process.env.E2E_BASE_URL;
+  // Fresh evidence directory per run; agent-browser doesn't create it.
+  rmSync(evidenceDir, { recursive: true, force: true });
+  mkdirSync(`${evidenceDir}/screenshots`, { recursive: true });
 
   if (!baseUrl) {
     const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -39,10 +45,16 @@ export default async function setup(project: TestProject): Promise<() => Promise
     server = spawn("npx", ["next", "start", "--port", String(PORT), "--hostname", "127.0.0.1"], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: { ...process.env, DATABASE_URL: databaseUrl, NODE_ENV: "production" },
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       // Own process group, so teardown also stops the next-server child that npx starts.
       detached: true,
     });
+    // Server log: shown live and kept as evidence in test-results/e2e/server.log.
+    const log = createWriteStream(`${evidenceDir}/server.log`);
+    server.stdout?.pipe(log);
+    server.stderr?.pipe(log);
+    server.stdout?.pipe(process.stdout);
+    server.stderr?.pipe(process.stderr);
     await waitForServer(baseUrl, 60_000);
   }
 

@@ -1,5 +1,14 @@
-# Definition-of-done gate for every pull request (spec: .ai/specs/2026-10-19-ci-pipeline.md).
-# Each job is one status check; all of them must be green on the PR's latest commit before merging.
+# Definition-of-done gate for every pull request (spec: .ai/specs/implemented/2026-10-19-ci-pipeline.md).
+# Each job is one required status check; all of them must be green on the PR's latest commit.
+#
+# Order by purpose, cheapest and broadest feedback first (a failed stage skips the later ones):
+#   1. static       lint, typecheck
+#   2. unit, build  unit tests + 100% coverage; production build (packaged for e2e)
+#   3. integration  repositories/transactions against a Testcontainers PostgreSQL
+#   4. e2e          the built app against a Testcontainers PostgreSQL, driven by agent-browser
+#
+# Evidence: every test job writes a job summary (results, coverage) and uploads its reports as
+# an artifact (`unit-evidence`, `integration-evidence`, `e2e-evidence`), also when it fails.
 name: CI
 
 on:
@@ -18,6 +27,7 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  # 1. Static checks
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -38,8 +48,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
+  # 2. Unit tests and build
   unit:
     name: unit (100% coverage)
+    needs: [lint, typecheck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,15 +60,24 @@ jobs:
       - run: npm ci
       # Fails when coverage of packages/*/src drops below 100%.
       - run: npm test
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage.txt ]; then
+            { echo "### Unit test coverage"; echo '```'; cat coverage/coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: coverage
-          path: coverage/
+          name: unit-evidence
+          path: |
+            test-results/unit/
+            coverage/
           if-no-files-found: ignore
 
   build:
     name: build
+    needs: [lint, typecheck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -65,9 +86,18 @@ jobs:
       - run: npm ci
       - run: npm run build
         env: { NODE_ENV: production }
+      # tar keeps the symlinks in .next/node_modules (server externals); artifacts would copy them.
+      - run: tar -czf next-build.tgz --exclude=.next/cache -C packages/app .next
+      - uses: actions/upload-artifact@v7
+        with:
+          name: next-build
+          path: next-build.tgz
+          retention-days: 1
 
+  # 3. Integration tests
   integration:
     name: integration (Testcontainers PostgreSQL)
+    needs: [unit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -76,9 +106,17 @@ jobs:
       - run: npm ci
       # No TEST_DATABASE_URL: the global setup starts postgres:17 with Testcontainers (Docker).
       - run: npm run test:int
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: integration-evidence
+          path: test-results/int/
+          if-no-files-found: ignore
 
+  # 4. End-to-end tests
   e2e:
     name: e2e (agent-browser + Testcontainers PostgreSQL)
+    needs: [build, integration]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -86,7 +124,22 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npx agent-browser install --with-deps
-      - run: npm run build
-        env: { NODE_ENV: production }
-      # The app starts with `next start` against a Testcontainers database and is driven by agent-browser.
+      # The exact build that passed the `build` check.
+      - uses: actions/download-artifact@v8
+        with: { name: next-build }
+      - run: tar -xzf next-build.tgz -C packages/app
+      # `next start` runs against a Testcontainers database and is driven by agent-browser.
       - run: npm run test:e2e
+      - name: Screenshots in the job summary
+        if: always()
+        run: |
+          shots=$(ls test-results/e2e/screenshots 2>/dev/null || true)
+          if [ -n "$shots" ]; then
+            { echo "### E2E evidence"; echo "Screenshots (artifact \`e2e-evidence\`):"; echo "$shots" | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-evidence
+          path: test-results/e2e/
+          if-no-files-found: ignore

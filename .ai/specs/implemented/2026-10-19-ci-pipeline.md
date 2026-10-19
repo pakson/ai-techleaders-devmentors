@@ -25,6 +25,19 @@ Every pull request runs the definition-of-done gate in GitHub Actions and must b
 - **New dev dependencies** (root): `@vitest/coverage-v8` (coverage), `@testcontainers/postgresql` (ephemeral Postgres). Both are needed by the requested features.
 - **Merge rule**: AGENTS.md requires that all checks have finished and are green **for the PR's latest commit** before merging (`gh pr checks <n> --watch`, confirming the head SHA). The existing ruleset "Main branch rule" (default branch; already blocked deletion and force-push) now also requires a pull request (0 approvals, review threads resolved, stale approvals dismissed) and the six status checks from GitHub Actions (`integration_id` 15368) on a branch that is up to date with `main`. It has no bypass actors. Added 2026-10-19 at the user's request.
 
+## Stage order and evidence (revision 2026-10-19, user request)
+
+- **Order by purpose** (jobs chained with `needs`, cheapest and broadest feedback first; a failed stage skips the later ones and saves runner time):
+  1. static: `lint`, `typecheck`
+  2. `unit` (needs static) and `build` (needs static; it checks the deliverable and doesn't depend on test results)
+  3. `integration` (needs `unit`): slower, needs Docker
+  4. `e2e` (needs `build` + `integration`): slowest. It runs the `.next` output of the `build` job (artifact `next-build`, packed with `tar` because `.next/node_modules` holds symlinks to the server externals), so e2e tests exactly what passed the build check.
+  - Trade-off: wall-clock time grows from about 1.5 to about 4 minutes in exchange for fail-fast feedback. The job names stay the same, so the ruleset's required checks are unchanged. A job skipped because an earlier stage failed never unblocks a merge, because the failed upstream check is itself required.
+- **Evidence per test level** (local files under `test-results/` and `coverage/`, gitignored; in CI: Vitest `github-actions` reporter job summary + annotations, and artifacts uploaded with `if: always()`):
+  - unit: `test-results/unit/junit.xml`, `coverage/` (HTML report + `coverage.txt`, appended to the job summary) → artifact `unit-evidence`
+  - integration: `test-results/int/junit.xml` → artifact `integration-evidence`
+  - e2e: `test-results/e2e/junit.xml`, `screenshots/<nn>-<scenario>.png` (one per scenario, plus `failed-<test>.png` on failure), `server.log` (`next start` output) → artifact `e2e-evidence`
+
 ## Slices
 
 1. **CI skeleton (lint, typecheck, build)**: workflow with the three jobs. Given a PR, when it is opened or updated, then the three checks run and pass.

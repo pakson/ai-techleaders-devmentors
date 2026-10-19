@@ -14,13 +14,16 @@ const testDatabase = {
 export default defineConfig({
   resolve: { tsconfigPaths: true, alias: { "server-only": serverOnly } },
   test: {
+    // Test evidence: JUnit XML (path set per script via --outputFile.junit) and, on GitHub
+    // Actions, annotations plus a job summary.
+    reporters: ["default", "junit", ...(process.env.GITHUB_ACTIONS ? ["github-actions"] : [])],
     // `npm test` fails unless the unit tests cover every line and branch of the source.
     coverage: {
       provider: "v8",
       include: ["packages/*/src/**/*.{ts,tsx}"],
       // Generated migrations are exercised by `test:int` / `test:e2e`, not unit tests.
       exclude: ["**/__tests__/**", "packages/db/src/migrations/**"],
-      reporter: ["text", "html"],
+      reporter: ["text", ["text", { file: "coverage.txt" }], "html"],
       thresholds: { lines: 100, branches: 100, functions: 100, statements: 100 },
     },
     projects: [

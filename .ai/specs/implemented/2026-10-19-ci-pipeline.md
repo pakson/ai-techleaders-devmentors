@@ -23,7 +23,7 @@ Every pull request runs the definition-of-done gate in GitHub Actions and must b
 - **agent-browser in CI**: `npx agent-browser install --with-deps` (Chrome + system libraries; lesson `agent-browser-linux-deps-and-process-groups`).
 - **Coverage**: `@vitest/coverage-v8`. `npm test` always collects coverage and fails under 100%, so the local gate and CI are the same command. Scope: all source in `packages/*/src/**/*.{ts,tsx}` except tests and generated MikroORM migrations (`packages/db/src/migrations/`, exercised by the integration and e2e runs). React components and pages are rendered with `react-dom/server` in unit tests.
 - **New dev dependencies** (root): `@vitest/coverage-v8` (coverage), `@testcontainers/postgresql` (ephemeral Postgres). Both are needed by the requested features.
-- **Merge rule**: AGENTS.md requires that all checks have finished and are green **for the PR's latest commit** before merging (`gh pr checks <n> --watch`, confirming the head SHA). Making the checks "required" in GitHub branch protection is a repository setting the owner configures (not done by this change).
+- **Merge rule**: AGENTS.md requires that all checks have finished and are green **for the PR's latest commit** before merging (`gh pr checks <n> --watch`, confirming the head SHA). The existing ruleset "Main branch rule" (default branch; already blocked deletion and force-push) now also requires a pull request (0 approvals, review threads resolved, stale approvals dismissed) and the six status checks from GitHub Actions (`integration_id` 15368) on a branch that is up to date with `main`. It has no bypass actors. Added 2026-10-19 at the user's request.
 
 ## Slices
 
@@ -35,4 +35,4 @@ Every pull request runs the definition-of-done gate in GitHub Actions and must b
 
 ## Out of scope
 
-Deployment, caching Chrome/Next build output between runs, branch-protection configuration, coverage for `e2e/` helpers and config files outside `src/`.
+Deployment, caching Chrome/Next build output between runs, required review approvals, coverage for `e2e/` helpers and config files outside `src/`.

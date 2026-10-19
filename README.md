@@ -55,7 +55,7 @@ npm run dev
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`. Each job is a separate check: `lint`, `typecheck`, `unit (100% coverage)`, `build`, `integration (Testcontainers PostgreSQL)` and `e2e (agent-browser + Testcontainers PostgreSQL)`. A pull request is merged only when all of them are green for its latest commit.
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`. Each job is a separate check: `lint`, `typecheck`, `unit (100% coverage)`, `build`, `integration (Testcontainers PostgreSQL)` and `e2e (agent-browser + Testcontainers PostgreSQL)`. A pull request is merged only when all of them are green for its latest commit. The `main` ruleset enforces this: pull requests only, all six checks required on an up-to-date branch, resolved review threads, no force-push or deletion, no bypass.
 
 ## Architecture
 

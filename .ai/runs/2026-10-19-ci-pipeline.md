@@ -23,7 +23,7 @@ GitHub Actions CI for every PR (lint, typecheck, unit + 100% coverage, build, in
 - Coverage scope includes `.tsx` pages and components (rendered with `react-dom/server`), so "100% of existing code" holds without excluding UI. The only exclusion is generated migrations.
 - Added a separate typecheck job (part of the definition of done, not explicitly requested).
 - Testcontainers instead of a GitHub service container: the same code path works locally (with Docker) and in CI.
-- Branch protection (making checks "required" in GitHub) was not changed. It's a repository setting for the owner.
+- Branch protection (follow-up, user request): extended the existing ruleset "Main branch rule" (id 25433382) with `pull_request` (0 approvals, thread resolution, dismiss stale reviews) and `required_status_checks` (six checks, GitHub Actions app 15368, strict/up-to-date). Kept deletion and non-fast-forward. No bypass actors. PR #2 then reported `mergeStateStatus: CLEAN`. Required approvals were left at 0 because the user didn't ask for reviews; raising it is a one-field change.
 
 ## Results
 
@@ -32,5 +32,4 @@ GitHub Actions CI for every PR (lint, typecheck, unit + 100% coverage, build, in
 
 ## Open issues
 
-- Configure branch protection on `main` so the six checks are required in GitHub (owner action).
 - npm warns that install scripts are blocked (`ssh2`, `cpu-features`, `protobufjs`, …). Testcontainers works without them in CI.

@@ -56,11 +56,12 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 - Follow the style: kebab-case files, named exports (except Next-required defaults), `import type` for types, no `any`, no `enum`, no non-null `!` outside tests. Branches `feat/` `fix/` `chore/` `docs/`, Conventional Commits.
 - Pages that read the database render at request time (`await connection()` first).
 - Before declaring work done: `npm run lint`, `npm run typecheck`, `npm test` (100% coverage) and `npm run build` pass. For UI changes, check the page with agent-browser. Run `npm run test:int` / `test:e2e` when touching the DB layer or user journeys.
-- Before merging a pull request, wait until **every CI check has finished and is green for the PR's latest commit**: run `gh pr checks <number> --watch`, then confirm the checks belong to the current head SHA (`gh pr view <number> --json headRefOid,statusCheckRollup`). A check that is pending, skipped, cancelled or failed, or a green run of an older commit, blocks the merge. Fix the cause and push again; never merge on red or "probably fine".
+- Before merging a pull request, wait until **every CI check has finished and is green for the PR's latest commit**: run `gh pr checks <number> --watch`, then confirm the checks belong to the current head SHA (`gh pr view <number> --json headRefOid,statusCheckRollup`). A check that is pending, skipped, cancelled or failed, or a green run of an older commit, blocks the merge. Fix the cause and push again; never merge on red or "probably fine". GitHub enforces the same rules on `main` (ruleset "Main branch rule"): changes land only through pull requests, the six CI checks are required and the branch must be up to date with `main`, review threads must be resolved, force-pushes and deletion are blocked, and nobody can bypass them.
 
 ## Ask first
 
 - Changing the stack, the package layout or a rule in this file (needs a spec).
+- Changing repository settings or the `main` ruleset. When a CI job is renamed, added or removed, update the required checks in the ruleset in the same PR, otherwise merges block on a check that never reports.
 - Adding a dependency, package, layer or pattern without a concrete need (see lesson `keep-solutions-simple`). "When needed" patterns in the standards spec (events, optimistic locking, soft delete, OpenAPI, forms library) wait for a real use case.
 - Writing to any database you didn't create. Check `echo $DATABASE_URL` first.
 

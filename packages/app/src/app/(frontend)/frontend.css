@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Public (frontend) pages: plain Tailwind. Also scan the shared frontend components. */
+@source "../../../../ui/src/frontend";
+
+@theme {
+  --color-brand: oklch(0.72 0.17 160);
+  --color-ink: oklch(0.2 0.02 260);
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}

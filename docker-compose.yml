@@ -1,0 +1,17 @@
+# Local PostgreSQL for development: `docker compose up -d`
+# Matches DATABASE_URL in packages/app/.env.example.
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devmentor
+      POSTGRES_PASSWORD: devmentor
+      POSTGRES_DB: devmentor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

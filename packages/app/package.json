@@ -1,0 +1,23 @@
+{
+  "name": "@devmentor/app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "dependencies": {
+    "@devmentor/core": "*",
+    "@devmentor/db": "*",
+    "@devmentor/ui": "*",
+    "next": "16.4.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

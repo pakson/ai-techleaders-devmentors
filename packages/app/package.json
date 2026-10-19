@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && effect-language-service diagnostics --project tsconfig.json --strict --format text"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -16,8 +16,11 @@
     "@devmentor/core": "*",
     "@devmentor/db": "*",
     "@devmentor/ui": "*",
+    "effect": "^4.0.5",
     "next": "16.4.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   }
 }

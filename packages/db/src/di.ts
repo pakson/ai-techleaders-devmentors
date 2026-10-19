@@ -1,4 +1,4 @@
-import { asFunction, asValue, type AppContainer } from "@devmentor/core";
+import { asFunction, asValue, type AppContainer } from "@devmentor/core/di";
 import type { EntityManager, MikroORM } from "@mikro-orm/postgresql";
 
 export interface DbCradle {

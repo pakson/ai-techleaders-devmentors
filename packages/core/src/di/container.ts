@@ -6,7 +6,9 @@ export type AppContainer<TCradle extends object = object> = AwilixContainer<TCra
  * A container module registers one package's/feature's services into the container.
  * Each package exposes its own module (e.g. `registerDb`), and the app composes them.
  */
-export type ContainerModule<TCradle extends object = object> = (container: AppContainer<TCradle>) => void;
+export type ContainerModule<TCradle extends object = object> = (
+  container: AppContainer<TCradle>,
+) => void;
 
 /**
  * Creates the Awilix container with the project-wide defaults:

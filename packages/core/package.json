@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config": "./src/config/index.ts",
+    "./di": "./src/di/index.ts",
+    "./errors": "./src/errors.ts",
+    "./http": "./src/http.ts",
+    "./schemas": "./src/schemas.ts",
+    "./validation": "./src/validation.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && effect-language-service diagnostics --project tsconfig.json --strict --format text"
   },
   "dependencies": {
-    "awilix": "^13.0.5"
+    "awilix": "^13.0.5",
+    "effect": "^4.0.5",
+    "zod": "^4.6.7"
   }
 }

@@ -1,38 +1,45 @@
+import { Redacted } from "effect";
+import { z } from "zod";
+
 import { ConfigError } from "../errors";
 
 type Env = Record<string, string | undefined>;
 
-/** Reads a required string variable. Throws `ConfigError` when it's missing or empty. */
-export function requireEnv(name: string, env: Env = process.env): string {
-  const value = env[name];
-  if (value === undefined || value === "") {
-    throw new ConfigError(`Missing required environment variable ${name}`);
+const Bool = z.string().transform((value) => ["true", "1", "yes"].includes(value.toLowerCase()));
+
+const EnvSchema = z.object({
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  DB_POOL_MIN: z.coerce.number().int().min(0).default(0),
+  DB_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  DB_DEBUG: Bool.default(false),
+});
+
+export interface Config {
+  /** postgres://user:pass@host:5432/db. Redacted, because it contains the password. */
+  readonly databaseUrl: Redacted.Redacted<string>;
+  readonly dbPoolMin: number;
+  readonly dbPoolMax: number;
+  readonly dbDebug: boolean;
+}
+
+/**
+ * Parses the environment with Zod. Empty values count as unset. Throws `ConfigError` listing
+ * every invalid variable.
+ */
+export function parseEnv(env: Env = process.env): Config {
+  const present = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ""));
+  const result = EnvSchema.safeParse(present);
+  if (!result.success) {
+    const problems = result.error.issues.map(
+      (issue) => `${issue.path.join(".")}: ${issue.message}`,
+    );
+    throw new ConfigError({ message: `Invalid environment: ${problems.join("; ")}` });
   }
-  return value;
-}
-
-/** Reads an optional string variable and returns `fallback` when it's unset or empty. */
-export function readEnv(name: string, fallback: string, env?: Env): string;
-export function readEnv(name: string, fallback?: undefined, env?: Env): string | undefined;
-export function readEnv(name: string, fallback?: string, env: Env = process.env): string | undefined {
-  const value = env[name];
-  return value === undefined || value === "" ? fallback : value;
-}
-
-/** Reads an optional integer variable. Throws `ConfigError` when the value isn't an integer. */
-export function readEnvInt(name: string, fallback: number, env: Env = process.env): number {
-  const raw = readEnv(name, undefined, env);
-  if (raw === undefined) return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value)) {
-    throw new ConfigError(`Environment variable ${name} must be an integer, got "${raw}"`);
-  }
-  return value;
-}
-
-/** Reads an optional boolean variable (`true`/`1`/`yes` mean true). */
-export function readEnvBool(name: string, fallback: boolean, env: Env = process.env): boolean {
-  const raw = readEnv(name, undefined, env);
-  if (raw === undefined) return fallback;
-  return ["true", "1", "yes"].includes(raw.toLowerCase());
+  const data = result.data;
+  return {
+    databaseUrl: Redacted.make(data.DATABASE_URL),
+    dbPoolMin: data.DB_POOL_MIN,
+    dbPoolMax: data.DB_POOL_MAX,
+    dbDebug: data.DB_DEBUG,
+  };
 }

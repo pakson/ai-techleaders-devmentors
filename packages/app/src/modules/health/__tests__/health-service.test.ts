@@ -1,7 +1,8 @@
-import { DbError } from "@devmentor/core/errors";
+import { Conflict, DbError } from "@devmentor/core/errors";
 import { Db, type EntityManager } from "@devmentor/db";
 import { assert, describe, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
+import { UniqueConstraintViolationException } from "@mikro-orm/core";
 
 import { HealthService } from "../health-service";
 
@@ -25,6 +26,21 @@ describe("HealthService", () => {
         Effect.flip,
       );
       assert.instanceOf(error, DbError);
+    }).pipe(Effect.provide(HealthService.layer)),
+  );
+
+  it.effect("treats Conflict/NotFound from `select 1` as a defect", () =>
+    Effect.gen(function* () {
+      const health = yield* HealthService;
+      const exit = yield* health.check().pipe(
+        withEm(() => Promise.reject(new UniqueConstraintViolationException(new Error("dup")))),
+        Effect.exit,
+      );
+      assert.isTrue(Exit.isFailure(exit));
+      if (Exit.isFailure(exit)) {
+        assert.isTrue(Cause.hasDies(exit.cause));
+        assert.instanceOf(Cause.squash(exit.cause), Conflict);
+      }
     }).pipe(Effect.provide(HealthService.layer)),
   );
 });

@@ -102,7 +102,7 @@ const eslintConfig = defineConfig([
       "react-hooks/rules-of-hooks": "off",
     },
   },
-  globalIgnores(["**/.next/**", "**/out/**", "**/build/**", "**/next-env.d.ts"]),
+  globalIgnores(["**/.next/**", "**/out/**", "**/build/**", "**/next-env.d.ts", "coverage/**"]),
 ]);
 
 export default eslintConfig;

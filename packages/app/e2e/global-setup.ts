@@ -1,5 +1,6 @@
-// Vitest globalSetup for `npm run test:e2e`: starts the built app (`next start`) against
-// TEST_DATABASE_URL, unless E2E_BASE_URL points at an already running instance.
+// Vitest globalSetup for `npm run test:e2e`: starts the built app (`next start`) against the test
+// database (TEST_DATABASE_URL, set by `test-database.ts`), unless E2E_BASE_URL points at an
+// already running instance.
 import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { TestProject } from "vitest/node";
@@ -33,8 +34,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 
   if (!baseUrl) {
     const databaseUrl = process.env.TEST_DATABASE_URL;
-    if (!databaseUrl)
-      throw new Error("TEST_DATABASE_URL (or E2E_BASE_URL) is required for e2e tests");
+    if (!databaseUrl) throw new Error("TEST_DATABASE_URL is not set (run test-database.ts first)");
     baseUrl = `http://127.0.0.1:${PORT}`;
     server = spawn("npx", ["next", "start", "--port", String(PORT), "--hostname", "127.0.0.1"], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),

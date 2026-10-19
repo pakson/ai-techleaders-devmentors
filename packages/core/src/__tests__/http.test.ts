@@ -67,4 +67,13 @@ describe("mapCause / errorToResponse", () => {
     expect(isUnexpected(Cause.fail(new NotFound({ resource: "session" })))).toBe(false);
     expect(isUnexpected(Cause.fail(new DbError({ cause: null })))).toBe(true);
   });
+
+  it("maps an interruption to 503 without logging it", () => {
+    const cause = Cause.interrupt();
+    expect(mapCause(cause)).toEqual({
+      status: 503,
+      error: { code: "interrupted", message: "Request was cancelled" },
+    });
+    expect(isUnexpected(cause)).toBe(false);
+  });
 });

@@ -57,4 +57,10 @@ describe("shared schemas", () => {
     const list = { items: [{ id: "a" }], total: 1, page: 1, pageSize: 20 };
     assert.deepStrictEqual(List.parse(list), list);
   });
+
+  it("decodes an ISO timestamp to a Date", () => {
+    const date = IsoDateTime.decode("2026-10-19T12:00:00.000Z");
+    assert.instanceOf(date, Date);
+    assert.strictEqual(date.toISOString(), "2026-10-19T12:00:00.000Z");
+  });
 });

@@ -10,4 +10,10 @@ Claude MUST follow the `.ai/` conventions defined in AGENTS.md:
 
 # DevMentor stack — summary (full rules in AGENTS.md)
 
-npm-workspaces monorepo: `packages/app` (Next.js), `packages/core` (DI/config/errors), `packages/db` (MikroORM + PostgreSQL, migrations), `packages/ui` (shadcn/ui + shared components). Awilix for DI, Tailwind for public pages, shadcn/ui for `/backend` pages. Don't change the stack or the package boundaries without user approval.
+npm-workspaces monorepo: `packages/app` (Next.js, modules, Effect edge adapters), `packages/core` (errors, Zod schemas/config, Awilix helpers), `packages/db` (MikroORM + PostgreSQL, migrations, `Db`/`withTransaction`), `packages/ui` (shadcn/ui + shared components). Backend code is Effect 4 (services as Layers) with Zod 4 at every boundary; Awilix only bootstraps the ORM and per-request `em`. Tailwind for public pages, shadcn/ui for `/backend` pages, Vitest + agent-browser for tests. Don't change the stack or the package boundaries without user approval.
+
+# How to implement — summary (full rules in AGENTS.md, "Planning and executing implementation tasks")
+
+- Split every task into minimal vertical slices: one end-to-end scenario per slice, each shippable on its own (lint, typecheck, tests and build green).
+- Per slice, use TDD: write failing tests for its scenarios (red), implement until green, then refactor. Tests must cover every implemented scenario.
+- Never weaken, skip or rewrite tests to make an implementation pass. Fix the code, or stop and explain if the requirement itself was wrong.

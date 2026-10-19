@@ -8,73 +8,87 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# DevMentor — architecture and stack (mandatory)
+# DevMentor — architecture and standards (mandatory)
 
-**DevMentor** is an npm-workspaces monorepo. The stack and layout below are fixed project decisions. Don't swap a technology, add a parallel alternative (another ORM, DI library, CSS framework or component kit) or change the package layout without explicit user approval and a spec. Full rationale is in `.ai/specs/implemented/2026-10-19-monorepo-architecture.md`.
+**DevMentor** is an npm-workspaces monorepo. The stack, layout and patterns below are approved project decisions. Rationale and examples: `.ai/specs/implemented/2026-10-19-monorepo-architecture.md` (layout) and `.ai/specs/implemented/2026-10-19-engineering-standards.md` (Effect, Zod, modules, errors, tests). Read the standards spec before writing backend code.
 
 ## Stack
 
 | Concern | Use | Don't use |
 | --- | --- | --- |
 | Framework | Latest **Next.js** (App Router, Turbopack) + **React** + **TypeScript** (`strict`) | Pages Router, plain JS files |
-| Database | **PostgreSQL** | other databases |
-| Data access | **MikroORM** (`@mikro-orm/postgresql`): migrations via `@mikro-orm/migrations`, connection pooling via the `pool` option | Prisma, Drizzle, TypeORM, raw `pg` pools |
-| Dependency injection | **Awilix** (via `@devmentor/core`) | ad-hoc singletons, other DI libraries |
+| Backend programming model | **Effect 4** (`effect`, all `effect`/`@effect/*` pinned to one version) | Effect 3 APIs, `effect/sql`, `effect/http-api` |
+| Validation | **Zod 4** at every boundary | Effect Schema, hand-written parsing |
+| Database | **PostgreSQL** via **MikroORM** (`@mikro-orm/postgresql`, migrations via `@mikro-orm/migrations`) | Prisma, Drizzle, TypeORM, raw `pg` pools |
+| Dependency injection | **Effect Layers** for services; **Awilix** (via `@devmentor/core/di`) only for infrastructure: the ORM and the per-request `em` fork | ad-hoc singletons, other DI libraries |
 | Frontend (public) pages | **Tailwind CSS** v4 utilities | CSS-in-JS, other CSS frameworks |
-| Backend (admin) pages | **shadcn/ui** components from `@devmentor/ui` (Tailwind-based) | other component kits |
+| Backend (admin) pages | **shadcn/ui** components from `@devmentor/ui` | other component kits |
+| Tests | **Vitest** + `@effect/vitest`; e2e with the **agent-browser** CLI | Jest, Playwright, Puppeteer, Cypress |
+| Formatting / lint | **Prettier** + ESLint (both in `npm run lint`) | |
 | Package manager | **npm** workspaces (keep `package-lock.json` committed) | pnpm/yarn/bun |
 
 Node.js >= 22.17 (required by MikroORM 7).
 
-## Packages (`packages/*`)
+## Packages
 
-| Package | Name | Responsibility |
-| --- | --- | --- |
-| `packages/app` | `@devmentor/app` | The Next.js application: routes, pages, route handlers, server actions, app services, DI composition root (`src/di/container.ts`) |
-| `packages/core` | `@devmentor/core` | Framework-agnostic reusable code: Awilix container factory and helpers, env/config readers, error types, shared types. No React, no Next, no ORM |
-| `packages/db` | `@devmentor/db` | Data management: MikroORM config, entities, migrations, ORM lifecycle (`getOrm`), DI registration (`registerDb`), repositories and DB helpers |
-| `packages/ui` | `@devmentor/ui` | Reusable React UI: shadcn/ui primitives (`src/components`), shared public-site components (`src/frontend`), `cn` helper, theme CSS (`src/styles/globals.css`) |
+| Package | Responsibility |
+| --- | --- |
+| `packages/app` (`@devmentor/app`) | Next.js routes/pages; `src/server/` (runtime, `runRequest`, `effectRoute`, `effectAction`); `src/modules/<module>/` (schemas, services, actions); `src/di/container.ts` (Awilix: ORM + `em`) |
+| `packages/core` (`@devmentor/core`) | Framework-agnostic: error taxonomy (`/errors`), `decode`/`encode` (`/validation`), Zod primitives (`/schemas`, client-safe), `errorToResponse` (`/http`), Zod env config (`/config`), Awilix helpers (`/di`). No React, Next or ORM |
+| `packages/db` (`@devmentor/db`) | MikroORM config, entities, migrations, `getOrm`, `registerDb`, `Db` service, `dbTry`, `withTransaction`, `baseProperties`; module entities/repositories in `src/modules/<module>/` |
+| `packages/ui` (`@devmentor/ui`) | shadcn/ui primitives (`src/components`), public-site components (`src/frontend`), `cn`, theme CSS. No Effect, no Zod |
 
-Rules:
+Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` import no internal package. Internal packages ship TypeScript source (`exports` → `src`, no build); import them by name and list every importable path in `exports`. Third-party deps go in the package that uses them (`npm i <pkg> -w @devmentor/<name>`); shared tooling goes in the root `package.json`. ESLint enforces the boundaries.
 
-- **Dependency direction:** `app → ui, db, core` and `db → core`. `core` and `ui` import no internal package. No cycles. Never import from `@devmentor/app` in another package.
-- Put new code in the lowest package where it fits. Reusable non-UI logic goes in `core`, anything touching the database goes in `db`, reusable components go in `ui`, and app-specific wiring stays in `app`.
-- **Internal packages ship TypeScript source.** There is no build step: `package.json#exports` points to `src`. Turbopack transpiles workspace packages. Every importable path must be listed in `exports`; import through the package name (`@devmentor/db`, `@devmentor/ui/components/button`), never through relative `../../packages/...` paths.
-- Internal dependencies use `"*"` versions. Add third-party deps to the package that uses them (`npm i <pkg> -w @devmentor/<name>`). Shared dev tooling (TypeScript, ESLint, `@types/*`) lives in the root `package.json`.
-- Every package has a `tsconfig.json` extending `tsconfig.base.json` and a `typecheck` script.
-- Code that runs in Turbopack-bundled server code must not use `new URL("./relative", import.meta.url)`, because Turbopack treats it as an asset import. Keep file-system paths in CLI-only modules.
+## Always
 
-## Database (MikroORM + PostgreSQL)
+- Put new code in the lowest package where it fits. A feature is a module: `packages/app/src/modules/<module>/` (`schemas.ts`, `errors.ts`, `<name>-service.ts`, `actions.ts`, `__tests__/`) plus entities in `packages/db/src/modules/<module>/`. Modules import each other only through `schemas`, `errors` and service tags.
+- Write services as `Context.Service` classes with key `"<module>/<Name>"` and a static `layer`; add the layer to `AppLayer` in `packages/app/src/server/runtime.ts`. Wrap every method in `Effect.fn("<Service>.<method>")`. Declare request context (`Db`, `RequestContext`) in the method's `R` channel; never capture it in the layer.
+- Run effects from edge code only through `runRequest` / `effectRoute` / `effectAction`. Call Next's `redirect()` / `notFound()` after `runRequest` returns. Read `headers()` / `cookies()` at the edge.
+- Decode every external input with Zod (`decode`, or the edge adapters) and encode every API/action output through a response schema. Schemas live in the module's isomorphic `schemas.ts`; derive types with `z.infer`. Take actor/tenant ids from the request context, never from input.
+- Put expected failures in the error channel as tagged errors from `@devmentor/core/errors` (`ValidationError`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `BusinessRuleViolation`, `DbError`). `throw` only for defects. Server actions return `ActionResult`.
+- Access the database through `Db` + `dbTry((em) => ...)`. Put transaction boundaries (`withTransaction`) in use cases, never in repositories. Define entities with `defineEntity` + `setClass`, spread `baseProperties()` (UUIDv7 `id`, `createdAt`, `updatedAt`) and add each to `entities/index.ts`. Cross-module references are FK id columns without ORM relations.
+- Start server-only modules with `import "server-only"`. Effect never runs in client components or `@devmentor/ui`.
+- Log through `Effect.log*` (no `console` in server code). Read env only through `parseEnv` / `createOrmConfig`.
+- Implement in minimal vertical slices with a test-first (TDD) loop; see [Planning and executing implementation tasks](#planning-and-executing-implementation-tasks).
+- Write tests: unit/service tests in `__tests__/*.test.ts` (fakes via `Layer.succeed`), DB tests in `__tests__/*.int.test.ts`, e2e in `packages/app/e2e/*.e2e.test.ts`. Every bug fix gets a test that fails without it.
+- Follow the style: kebab-case files, named exports (except Next-required defaults), `import type` for types, no `any`, no `enum`, no non-null `!` outside tests. Branches `feat/` `fix/` `chore/` `docs/`, Conventional Commits.
+- Pages that read the database render at request time (`await connection()` first).
+- Before declaring work done: `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass. For UI changes, check the page with agent-browser. Run `npm run test:int` / `test:e2e` when touching the DB layer or user journeys.
 
-- Define entities with **`defineEntity` + `setClass`** (no decorators) in `packages/db/src/entities/`, and add each one to the `entities` array in `entities/index.ts`.
-- Change the schema **only through migrations**: edit entities, then run `npm run db:migration:create`, review the generated file in `packages/db/src/migrations/`, and commit it. Apply with `npm run db:migration:up`. Never use `schema:update` against shared databases, and never edit an applied migration.
-- Use one `MikroORM` instance per process via `getOrm()` (lazy and HMR-safe). Never initialize the ORM at module import time, because `next build` must work without a database.
-- Never use the global `orm.em` in request code. Resolve the **scoped `em`** from a container scope (a fork with its own identity map).
-- Connection settings come from env: `DATABASE_URL` (required), `DB_POOL_MIN`, `DB_POOL_MAX`, `DB_DEBUG`. Read them through `createOrmConfig()`, not ad hoc.
-- `packages/db/src/mikro-orm.config.ts` is **CLI-only**: it adds the Migrator and migration paths. The Next.js runtime uses `createOrmConfig()` without them. MikroORM driver packages are listed in `serverExternalPackages` in `packages/app/next.config.ts`; add any new `@mikro-orm/*` runtime package there too.
+## Ask first
 
-## Dependency injection (Awilix)
+- Changing the stack, the package layout or a rule in this file (needs a spec).
+- Adding a dependency, package, layer or pattern without a concrete need (see lesson `keep-solutions-simple`). "When needed" patterns in the standards spec (events, optimistic locking, soft delete, OpenAPI, forms library) wait for a real use case.
+- Writing to any database you didn't create. Check `echo $DATABASE_URL` first.
 
-- Create containers only with `createAppContainer()` from `@devmentor/core`: `InjectionMode.PROXY`, `strict: true`.
-- Each package/feature exposes a registration function (a `ContainerModule`, e.g. `registerDb(orm)`) and a cradle interface (e.g. `DbCradle`). The app composes them in `packages/app/src/di/container.ts` and extends `AppCradle`.
-- Services are classes or factories that take their dependencies from the cradle object (`constructor({ em }: Pick<AppCradle, "em">)`). Don't import other services directly, and don't call `getContainer()` inside services.
-- Lifetimes: anything depending on `em` (directly or indirectly) is `.scoped()`. Stateless or process-wide things are `.singleton()`. Strict mode rejects singletons that depend on scoped registrations, so don't work around it.
-- In route handlers, server actions and server components, call `createRequestScope()` once per unit of work and resolve from `scope.cradle`.
+## Never
 
-## UI and routing
+- Use Effect 3 APIs (`Context.Tag`, `Effect.Service`, `catchAll`, `Either`); most online examples are v3, so check `node_modules/effect/AGENTS.md`.
+- Call `Effect.runPromise` inside services, repositories or use cases, or write `async` functions there.
+- Use the global `orm.em` in request code, initialize the ORM at import time, or change the schema without a migration (`npm run db:migration:create`, review, commit; never edit an applied migration; never `schema:update` on shared databases).
+- Return entities or class instances to the client.
+- Use `new URL("./relative", import.meta.url)` in code Turbopack bundles (keep file-system paths in CLI-only modules such as `mikro-orm.config.ts`).
+- Point `TEST_DATABASE_URL` at a shared or dev database.
+- Weaken, delete, skip (`.skip`/`.only`/`.todo`) or rewrite a test so that a broken implementation passes. Don't loosen assertions, swap in fakes that hide the behavior under test, or catch the failure inside the test. Change a test only when the requirement itself changed, and say so in the run log.
 
-- Public pages live in `packages/app/src/app/(frontend)/` and are styled with **Tailwind utilities**. Their root layout imports `(frontend)/frontend.css`. Shared public components go in `packages/ui/src/frontend/`.
-- Admin pages live in `packages/app/src/app/(backend)/backend/` (URL `/backend/...`) and are built from **shadcn/ui** components. Their root layout imports `@devmentor/ui/globals.css` (shadcn theme tokens).
-- `(frontend)` and `(backend)` are **separate root layouts**: their styles never mix, and navigating between them is a full page load (use `<a>`, not `<Link>`, for cross-area links).
-- Add shadcn components with the CLI from the ui package: `cd packages/ui && npx shadcn@latest add <component>`. They land in `packages/ui/src/components/`. Don't hand-copy them into the app. Import as `@devmentor/ui/components/<name>`.
-- Use `cn` from `@devmentor/ui/lib/utils` to merge class names.
-- Pages that read the database must render at request time (e.g. `await connection()` from `next/server`) so data isn't baked in at build.
+## Task router
 
-## Environment and commands
+| Task | Where to look |
+| --- | --- |
+| New feature/module | standards spec §5–§9, `packages/app/src/modules/health/` (reference) |
+| Route handler / server action | `packages/app/src/server/effect-route.ts`, `effect-action.ts`, `app/api/health/route.ts` |
+| Entity, repository, migration | `packages/db/src/entities/`, `packages/db/src/effect.ts`, `npm run db:migration:*` (MikroORM CLI config `packages/db/src/mikro-orm.config.ts`; runtime driver packages listed in `serverExternalPackages` in `packages/app/next.config.ts`) |
+| Errors and HTTP mapping | `packages/core/src/errors.ts`, `http.ts` |
+| Env/config | `packages/core/src/config/env.ts`, `packages/app/.env.example` |
+| Public page | `packages/app/src/app/(frontend)/` (Tailwind; layout imports `frontend.css`; shared components in `packages/ui/src/frontend/`) |
+| Admin page | `packages/app/src/app/(backend)/backend/` (shadcn/ui; add components with `cd packages/ui && npx shadcn@latest add <name>`, import `@devmentor/ui/components/<name>`). `(frontend)` and `(backend)` are separate root layouts: link between them with `<a>`, not `<Link>` |
+| Tests | `vitest.config.mts`, `packages/*/src/**/__tests__/`, `packages/app/e2e/` |
 
-- Env files live in `packages/app/` (`.env.local`, from `.env.example`). The MikroORM CLI loads the same files. Real environment variables override `.env*` files. Never commit real `.env` files.
-- Root scripts: `npm run dev | build | start` (forward to the app), `npm run lint`, `npm run typecheck` (all packages), `npm run db:migration:create | up | down | list`.
-- Before declaring work done: `npm run lint`, `npm run typecheck` and `npm run build` must pass.
+## Commands
+
+- `npm run dev | build | start`, `npm run lint` (ESLint + Prettier check), `npm run format`, `npm run typecheck` (tsc + Effect diagnostics), `npm test` (unit + service), `npm run test:int` (needs `TEST_DATABASE_URL`), `npm run test:e2e` (needs `npm run build` and `TEST_DATABASE_URL` or `E2E_BASE_URL`; Chrome via `npx agent-browser install --with-deps`), `npm run db:migration:create | up | down | list`.
+- Env files live in `packages/app/` (`.env.local` from `.env.example`); real environment variables override them. Never commit real `.env` files.
 
 # `.ai/` workspace — mandatory conventions
 
@@ -116,8 +130,31 @@ All file names in `specs/`, `runs/` and `lessons/` use the format `YYYY-MM-DD-sl
 
 # Working principles
 
-- **Plan complex tasks first.** For multi-file, ambiguous or architectural work, explore and plan before editing. Get user approval and capture the plan in a spec (see Specs). Aim to implement it in one pass. If the work goes sideways, stop and re-plan; don't keep patching.
-- **Verify every change.** Before declaring work done, run `npm run lint`, `npm run typecheck` and `npm run build`. For UI changes, run the app (`npm run dev`) and check the affected page. Report results truthfully: state what failed and what was not verified.
+## Planning and executing implementation tasks
+
+**1. Split the task into minimal vertical slices.**
+
+- A slice is the smallest change that delivers one user-observable scenario end to end, through every layer it needs: Zod schema → service/use case → entity/migration (if any) → route/action → page. Examples: "book a session (happy path)", then "booking fails when the slot is taken", then "list my sessions".
+- Don't slice horizontally ("all entities first, then all services, then all UI"). Each slice must be shippable on its own: lint, typecheck, tests and build pass after every slice.
+- Order slices so the first one proves the core path (walking skeleton) and later ones add error cases, edge cases and polish. Defer anything no slice needs (keep-it-simple rule).
+- Write the slice list in the spec (or in the run log for small tasks). Give each slice its scenarios as acceptance criteria ("given … when … then …") and the test level that proves each one (unit, service, int, e2e).
+
+**2. Implement each slice test-first (TDD), red → green → refactor.**
+
+1. **Red:** write the tests for the slice's scenarios first, covering the happy path and every typed failure the slice introduces (`NotFound`, `Conflict`, `ValidationError`, …). Run them and confirm they fail for the expected reason (missing behavior, not a typo or bad import).
+2. **Green:** write the simplest production code that makes them pass. Run the tests after each change and keep working until they are green; don't stop at "should work".
+3. **Refactor:** clean up code and tests while they stay green.
+4. **Gate:** run `npm run lint`, `npm run typecheck`, `npm test` (plus `test:int` / `test:e2e` when the slice touches the DB or a user journey) and `npm run build`. Then log the slice in the run log and move to the next one.
+
+- Tests must cover every implemented scenario. If code exists that no test exercises, add the missing test or remove the code.
+- Choose the lowest test level that proves the scenario: pure functions and schemas get unit tests, services and use cases get service tests with fake layers, repositories and transactions get `*.int.test.ts`, critical journeys get an agent-browser e2e test.
+- A failing test means the implementation is wrong until proven otherwise. Fix the code, not the test (see **Never**). If a test really is wrong (a bad assumption about the requirement), stop, explain why in the run log or to the user, and only then change it.
+- If a slice gets stuck (tests stay red after a few honest attempts, or the design fights you), stop and re-plan the slice instead of patching around it.
+
+## General
+
+- **Plan complex tasks first.** For multi-file, ambiguous or architectural work, explore and plan before editing. Get user approval and capture the plan, including its vertical slices, in a spec (see Specs). Then implement slice by slice, test-first. If the work goes sideways, stop and re-plan; don't keep patching.
+- **Verify every change.** Before declaring work done, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build`. For UI changes, run the app (`npm run dev`) and check the affected page with agent-browser. Report results truthfully: state what failed and what was not verified.
 - **Fix bugs end-to-end.** Given a bug report or failing check, find the root cause from logs, errors and code, fix it, and verify the fix without asking for step-by-step guidance. Record a lesson if the cause was non-obvious.
 - **Prefer the elegant solution.** If a fix turns out hacky, replace it with the clean solution rather than layering workarounds.
 - **Use subagents for breadth.** Delegate wide searches, research and independent subtasks to subagents. This keeps the main context focused. Parallel work on separate tasks should use separate git worktrees.

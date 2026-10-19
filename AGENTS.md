@@ -87,7 +87,7 @@ Dependency direction: `app → ui, db, core` and `db → core`. `core` and `ui` 
 | Public page | `packages/app/src/app/(frontend)/` (Tailwind; layout imports `frontend.css`; shared components in `packages/ui/src/frontend/`) |
 | Admin page | `packages/app/src/app/(backend)/backend/` (shadcn/ui; add components with `cd packages/ui && npx shadcn@latest add <name>`, import `@devmentor/ui/components/<name>`). `(frontend)` and `(backend)` are separate root layouts: link between them with `<a>`, not `<Link>` |
 | Tests | `vitest.config.mts` (projects, coverage thresholds), `packages/*/src/**/__tests__/`, `packages/app/e2e/`, test DB setup `packages/db/src/__tests__/test-database.ts` |
-| CI | `.github/workflows/ci.yml` (jobs `lint`, `typecheck`, `unit`, `build`, `integration`, `e2e`); spec `.ai/specs/2026-10-19-ci-pipeline.md` |
+| CI | `.github/workflows/ci.yml` (jobs `lint`, `typecheck`, `unit`, `build`, `integration`, `e2e`); spec `.ai/specs/implemented/2026-10-19-ci-pipeline.md` |
 
 ## Commands
 

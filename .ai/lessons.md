@@ -30,6 +30,7 @@ Index of long-term learnings recorded by humans and LLMs. Read this file before 
 
 <!-- Format: - [YYYY-MM-DD slug](lessons/YYYY-MM-DD-slug.md) — one-line summary -->
 
+- [2026-10-19 test-workers-need-injected-database-url](lessons/2026-10-19-test-workers-need-injected-database-url.md) — pass the Testcontainers URL to workers via `provide`/`inject`; prove isolation with an unreachable shell `DATABASE_URL`
 - [2026-10-19 agent-browser-linux-deps-and-process-groups](lessons/2026-10-19-agent-browser-linux-deps-and-process-groups.md) — `agent-browser install --with-deps` on Linux; spawned e2e servers must be killed by process group
 - [2026-10-19 effect-v4-gotchas](lessons/2026-10-19-effect-v4-gotchas.md) — `yield* Tag`/`Tag.use` (no `asEffect`), hooks lint misreads `Tag.use` in .tsx, Effect diagnostics catch what tsc misses
 - [2026-10-19 keep-solutions-simple](lessons/2026-10-19-keep-solutions-simple.md) — build only what is needed/requested; justify every new dependency, layer or pattern

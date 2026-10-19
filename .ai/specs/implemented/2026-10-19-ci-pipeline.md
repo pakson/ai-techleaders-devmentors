@@ -1,7 +1,7 @@
 # CI pipeline (GitHub Actions), 100% unit coverage, ephemeral test database
 
 - Date: 2026-10-19
-- Status: approved (user request, 2026-10-19)
+- Status: implemented (2026-10-19, PR #2)
 - Related: `implemented/2026-10-19-engineering-standards.md` §11 (testing) and §14 (open question "CI pipeline")
 
 ## Goal

@@ -1,0 +1,9 @@
+# Docs and generated files keep their own formatting.
+**/*.md
+package-lock.json
+packages/db/src/migrations/
+packages/ui/src/components/
+packages/ui/src/styles/
+**/.next/
+**/next-env.d.ts
+.ai/

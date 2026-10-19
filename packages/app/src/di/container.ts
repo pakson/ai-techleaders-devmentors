@@ -1,19 +1,11 @@
-import { asClass, createAppContainer, type AppContainer } from "@devmentor/core";
+import { createAppContainer, type AppContainer } from "@devmentor/core/di";
 import { getOrm, registerDb, type DbCradle } from "@devmentor/db";
 
-import { HealthService } from "@/services/health-service";
+// Awilix only bootstraps infrastructure (the ORM and the per-request `em` fork). Application
+// services are Effect layers composed in `src/server/runtime.ts`.
 
-/** Everything resolvable from the container. Extend it when adding a module. */
-export interface AppCradle extends DbCradle {
-  healthService: HealthService;
-}
-
-function registerAppServices(container: AppContainer<AppCradle>): void {
-  container.register({
-    // Scoped, because it depends on the request-scoped `em`.
-    healthService: asClass(HealthService).scoped(),
-  });
-}
+/** Everything resolvable from the container. */
+export type AppCradle = DbCradle;
 
 // Composition root: one container per process, kept on globalThis to survive dev HMR.
 const globalForContainer = globalThis as typeof globalThis & {
@@ -23,7 +15,7 @@ const globalForContainer = globalThis as typeof globalThis & {
 export function getContainer(): Promise<AppContainer<AppCradle>> {
   globalForContainer.__devmentorContainer ??= (async () => {
     const orm = await getOrm();
-    return createAppContainer<AppCradle>([registerDb(orm), registerAppServices]);
+    return createAppContainer<AppCradle>([registerDb(orm)]);
   })().catch((error: unknown) => {
     globalForContainer.__devmentorContainer = undefined;
     throw error;
@@ -33,7 +25,7 @@ export function getContainer(): Promise<AppContainer<AppCradle>> {
 
 /**
  * Creates a container scope for one unit of work (request, server action, job).
- * Scoped registrations such as `em` are fresh in each scope.
+ * Scoped registrations such as `em` are fresh in each scope. Edge code uses `runRequest`.
  */
 export async function createRequestScope(): Promise<AppContainer<AppCradle>> {
   return (await getContainer()).createScope();

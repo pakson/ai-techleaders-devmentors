@@ -8,7 +8,7 @@
     "./entities": "./src/entities/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && effect-language-service diagnostics --project tsconfig.json --strict --format text",
     "mikro-orm": "mikro-orm",
     "migration:create": "mikro-orm migration:create",
     "migration:up": "mikro-orm migration:up",
@@ -16,10 +16,12 @@
     "migration:list": "mikro-orm migration:list"
   },
   "dependencies": {
+    "@devmentor/core": "*",
     "@mikro-orm/core": "^7.2.5",
     "@mikro-orm/migrations": "^7.2.5",
     "@mikro-orm/postgresql": "^7.2.5",
-    "@devmentor/core": "*"
+    "effect": "^4.0.5",
+    "uuidv7": "^1.2.1"
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.5",

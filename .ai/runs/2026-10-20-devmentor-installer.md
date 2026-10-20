@@ -25,10 +25,10 @@
 
 - [x] 2.1 Resolve targets and protect external databases with explicit confirmation — 28849c9
 - [x] 2.2 Start/reuse PostgreSQL and poll readiness with bounded, redacted errors — 28849c9
-- [ ] 2.3 Delegate pending migrations and cover disposable database preservation
+- [x] 2.3 Delegate pending migrations and cover disposable database preservation — 28849c9
 
 ### Phase 3: Documentation and verification
 
-- [ ] 3.1 Update README automated/manual setup guidance and scripts
-- [ ] 3.2 Run the full validation and applicable integration/E2E checks
+- [x] 3.1 Update README automated/manual setup guidance and scripts — 28849c9
+- [x] 3.2 Run the full validation and applicable integration/E2E checks — local gate passed; `test:int` awaits a container runtime
 - [ ] 3.3 Run review/autofix, publish evidence, and complete the implementation PR

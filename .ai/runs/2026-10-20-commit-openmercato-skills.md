@@ -31,6 +31,13 @@
 - Inventory and lockfile checks — passed: 58 skills and 58 symlinks.
 - Final staged-tree and commit verification — passed after commit; the working tree is clean.
 
+## Publication follow-up
+
+- Pushed `f97ea62` to `origin/feat/engineering-standards`.
+- Confirmed no existing pull request matched the branch.
+- Opened [PR #3](https://github.com/pakson/ai-techleaders-devmentors/pull/3) against `main`.
+- The repository has no `.ai/agentic.config.json`, so its configured validation gate was unavailable; full CI is left to the pull request checks.
+
 ## Open issues and next steps
 
 - No application tests are needed for this documentation/tooling-only commit.

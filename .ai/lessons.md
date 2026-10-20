@@ -30,6 +30,7 @@ Index of long-term learnings recorded by humans and LLMs. Read this file before 
 
 <!-- Format: - [YYYY-MM-DD slug](lessons/YYYY-MM-DD-slug.md) — one-line summary -->
 
+- [2026-10-20 openmercato-skill-lint](lessons/2026-10-20-openmercato-skill-lint.md) — run the repository formatter on installed OpenMercato scripts before committing them
 - [2026-10-19 junit-reporter-holds-output-file-open](lessons/2026-10-19-junit-reporter-holds-output-file-open.md) — don't delete a reporter's output dir from global setup; verify evidence files, not log lines
 - [2026-10-19 sandbox-has-no-docker](lessons/2026-10-19-sandbox-has-no-docker.md) — known limitation: run DB tests locally via `TEST_DATABASE_URL` (throwaway cluster), Testcontainers path is verified in CI
 - [2026-10-19 test-workers-need-injected-database-url](lessons/2026-10-19-test-workers-need-injected-database-url.md) — pass the Testcontainers URL to workers via `provide`/`inject`; prove isolation with an unreachable shell `DATABASE_URL`

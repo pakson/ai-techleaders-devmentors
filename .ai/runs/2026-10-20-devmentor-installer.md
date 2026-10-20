@@ -18,13 +18,13 @@
 
 ### Phase 1: Bootstrap and orchestration
 
-- [ ] 1.1 Add the root setup entry point and installer orchestration seams
-- [ ] 1.2 Add unit coverage for fresh, repeat, partial, and failure paths
+- [x] 1.1 Add the root setup entry point and installer orchestration seams — 28849c9
+- [x] 1.2 Add unit coverage for fresh, repeat, partial, and failure paths — 28849c9
 
 ### Phase 2: Database safety
 
-- [ ] 2.1 Resolve targets and protect external databases with explicit confirmation
-- [ ] 2.2 Start/reuse PostgreSQL and poll readiness with bounded, redacted errors
+- [x] 2.1 Resolve targets and protect external databases with explicit confirmation — 28849c9
+- [x] 2.2 Start/reuse PostgreSQL and poll readiness with bounded, redacted errors — 28849c9
 - [ ] 2.3 Delegate pending migrations and cover disposable database preservation
 
 ### Phase 3: Documentation and verification

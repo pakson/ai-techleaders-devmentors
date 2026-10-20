@@ -2,8 +2,10 @@ import { access, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { createInterface } from "node:readline/promises";
+import { createInterface as createOutputLines } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
 import { join } from "node:path";
+import { parseEnv as parseNodeEnv } from "node:util";
 
 export const MIN_NODE_VERSION = "22.17.0";
 export const READINESS_TIMEOUT_MS = 60_000;
@@ -59,14 +61,11 @@ const defaultFileSystem: FileSystem = {
     }
   },
   read: (path) => readFile(path, "utf8"),
-  write: (path, contents) => writeFile(path, contents, "utf8"),
+  write: (path, contents) => writeFile(path, contents, { encoding: "utf8", flag: "wx" }),
 };
 
-const npmCommand = (platform: NodeJS.Platform): string =>
-  platform === "win32" ? "npm.cmd" : "npm";
-
 const dockerCommand = (platform: NodeJS.Platform): string =>
-  platform === "win32" ? "docker.cmd" : "docker";
+  platform === "win32" ? "docker.exe" : "docker";
 
 const versionParts = (version: string): ReadonlyArray<number> =>
   version
@@ -97,20 +96,12 @@ export const stripQuotes = (value: string): string => {
   return value;
 };
 
-export const parseEnvFile = (contents: string): Record<string, string> => {
-  const values: Record<string, string> = {};
-  for (const rawLine of contents.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (line === "" || line.startsWith("#")) continue;
-    const assignment = line.startsWith("export ") ? line.slice(7) : line;
-    const separator = assignment.indexOf("=");
-    if (separator < 1) continue;
-    const key = assignment.slice(0, separator).trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/u.test(key)) continue;
-    values[key] = stripQuotes(assignment.slice(separator + 1).trim());
-  }
-  return values;
-};
+export const parseEnvFile = (contents: string): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(parseNodeEnv(contents))
+      .filter(([key]) => /^[A-Z_][A-Z0-9_]*$/u.test(key))
+      .map(([key, value]) => [key, String(value)]),
+  );
 
 export const redactOutput = (message: string): string =>
   message
@@ -142,12 +133,19 @@ export const isLocalDatabaseTarget = (target: DatabaseTarget): boolean =>
 
 export const runCommand: CommandRunner = (command, args, options) =>
   new Promise((resolve) => {
-    const child = spawn(command, [...args], {
-      cwd: options.cwd,
-      env: options.env,
-      shell: false,
-      stdio: ["inherit", "pipe", "pipe"],
-    });
+    // npm exposes its JS entry point to scripts on every supported platform.
+    // Launch it through Node: Windows cannot directly spawn npm.cmd without a shell.
+    const npmPath = command === "npm" ? options.env.npm_execpath : undefined;
+    const child = spawn(
+      npmPath ? process.execPath : command,
+      npmPath ? [npmPath, ...args] : [...args],
+      {
+        cwd: options.cwd,
+        env: options.env,
+        shell: false,
+        stdio: ["inherit", "pipe", "pipe"],
+      },
+    );
     const forwardSignal = (signal: NodeJS.Signals): void => {
       child.kill(signal);
     };
@@ -155,18 +153,17 @@ export const runCommand: CommandRunner = (command, args, options) =>
     const onTerminate = (): void => forwardSignal("SIGTERM");
     process.once("SIGINT", onInterrupt);
     process.once("SIGTERM", onTerminate);
-    child.stdout.on("data", (chunk: Buffer) =>
-      process.stdout.write(redactOutput(chunk.toString())),
-    );
-    child.stderr.on("data", (chunk: Buffer) =>
-      process.stderr.write(redactOutput(chunk.toString())),
-    );
+    // Buffer complete lines so a URL split across OS pipe chunks cannot leak.
+    const stdout = createOutputLines({ input: child.stdout });
+    const stderr = createOutputLines({ input: child.stderr });
+    stdout.on("line", (line) => process.stdout.write(`${redactOutput(line)}\n`));
+    stderr.on("line", (line) => process.stderr.write(`${redactOutput(line)}\n`));
     child.once("error", () => {
       process.removeListener("SIGINT", onInterrupt);
       process.removeListener("SIGTERM", onTerminate);
       resolve({ exitCode: 1, signal: null });
     });
-    child.once("exit", (exitCode, signal) => {
+    child.once("close", (exitCode, signal) => {
       process.removeListener("SIGINT", onInterrupt);
       process.removeListener("SIGTERM", onTerminate);
       resolve({ exitCode: exitCode ?? 1, signal });
@@ -224,9 +221,10 @@ const reportFailure = (
   writeError: (message: string) => void,
   step: string,
   message: string,
+  exitCode = 1,
 ): InstallerResult => {
   writeError(`✗ ${step}: ${redactOutput(message)}`);
-  return { exitCode: 1, failedStep: step };
+  return { exitCode, failedStep: step };
 };
 
 export async function runInstaller(options: InstallerOptions): Promise<InstallerResult> {
@@ -240,7 +238,7 @@ export async function runInstaller(options: InstallerOptions): Promise<Installer
   const nodeVersion = options.nodeVersion ?? process.versions.node;
   const run = (command: string, args: ReadonlyArray<string>): Promise<CommandResult> =>
     commandRunner(command, args, { cwd: options.projectRoot, env });
-  const npm = npmCommand(platform);
+  const npm = "npm";
 
   if (!isVersionAtLeast(nodeVersion)) {
     return reportFailure(
@@ -250,34 +248,40 @@ export async function runInstaller(options: InstallerOptions): Promise<Installer
     );
   }
 
-  const nodeModules = join(options.projectRoot, "node_modules");
-  const packageLock = join(nodeModules, ".package-lock.json");
-  if ((await fileSystem.exists(nodeModules)) && (await fileSystem.exists(packageLock))) {
-    writeOut("✓ Dependencies already installed; skipping npm install.");
-  } else {
-    writeOut("→ Installing workspace dependencies...");
-    const result = await run(npm, ["install"]);
-    if (result.exitCode !== 0)
-      return reportFailure(
-        writeError,
-        "dependencies",
-        `npm install failed with exit code ${result.exitCode}`,
-      );
+  // npm checks the actual tree, including changed locks and deleted packages.
+  // The mere presence of node_modules/.package-lock.json is not proof of health.
+  writeOut("→ Checking and installing workspace dependencies...");
+  const installation = await run(npm, ["install"]);
+  if (installation.exitCode !== 0 || installation.signal !== null) {
+    return reportFailure(
+      writeError,
+      "dependencies",
+      `npm install failed with exit code ${installation.exitCode}; correct the error and rerun npm run setup`,
+      installation.exitCode || 1,
+    );
   }
 
   const envPath = join(options.projectRoot, "packages", "app", ".env.local");
   const examplePath = join(options.projectRoot, "packages", "app", ".env.example");
   let envContents: string;
-  if (await fileSystem.exists(envPath)) {
-    envContents = await fileSystem.read(envPath);
-    writeOut("✓ Existing packages/app/.env.local preserved.");
-  } else {
-    if (!(await fileSystem.exists(examplePath))) {
-      return reportFailure(writeError, "environment", "packages/app/.env.example is missing");
+  try {
+    if (await fileSystem.exists(envPath)) {
+      envContents = await fileSystem.read(envPath);
+      writeOut("✓ Existing packages/app/.env.local preserved.");
+    } else {
+      if (!(await fileSystem.exists(examplePath))) {
+        return reportFailure(writeError, "environment", "packages/app/.env.example is missing");
+      }
+      envContents = await fileSystem.read(examplePath);
+      await fileSystem.write(envPath, envContents);
+      writeOut("✓ Created packages/app/.env.local from the example.");
     }
-    envContents = await fileSystem.read(examplePath);
-    await fileSystem.write(envPath, envContents);
-    writeOut("✓ Created packages/app/.env.local from the example.");
+  } catch {
+    return reportFailure(
+      writeError,
+      "environment",
+      "Cannot read or create packages/app/.env.local; check the directory and file permissions, then rerun npm run setup",
+    );
   }
 
   const values = { ...parseEnvFile(envContents), ...env };
@@ -305,7 +309,7 @@ export async function runInstaller(options: InstallerOptions): Promise<Installer
     const allowedByEnvironment = values.DEVMENTOR_SETUP_ALLOW_EXTERNAL_DATABASE === "1";
     const confirmed =
       allowedByEnvironment ||
-      (options.stdinIsTTY === true &&
+      ((options.stdinIsTTY ?? process.stdin.isTTY) === true &&
         (await (options.confirmExternalDatabase ?? askForExternalDatabase)()));
     if (!confirmed) {
       return reportFailure(
@@ -340,7 +344,19 @@ export async function runInstaller(options: InstallerOptions): Promise<Installer
   }
 
   writeOut("→ Applying pending migrations...");
-  const migration = await run(npm, ["run", "db:migration:up"]);
+  // The migration CLI loads Next env files independently. Pin the target we
+  // checked and confirmed so another env file cannot silently redirect writes.
+  const migration = await commandRunner(npm, ["run", "db:migration:up"], {
+    cwd: options.projectRoot,
+    env: {
+      ...env,
+      DATABASE_URL: databaseUrl,
+      MIKRO_ORM_CLIENT_URL: databaseUrl,
+      MIKRO_ORM_HOST: target.host,
+      MIKRO_ORM_PORT: String(target.port),
+      MIKRO_ORM_DB_NAME: target.database,
+    },
+  });
   if (migration.exitCode !== 0)
     return reportFailure(
       writeError,

@@ -42,6 +42,7 @@ import {
   runInstaller,
   stripQuotes,
   waitForPostgres,
+  type CommandRunner,
   type CommandResult,
   type FileSystem,
   type InstallerOptions,
@@ -115,15 +116,26 @@ describe("installer parsing", () => {
       lower=value
       ONE=x
       EMPTY=
-      DB_POOL_MAX=10 # keep inline text
+      DB_POOL_MAX=10 # inline comment
     `),
     ).toEqual({
       DATABASE_URL: "postgres://localhost/db",
       DB_DEBUG: "false",
       ONE: "x",
       EMPTY: "",
-      DB_POOL_MAX: "10 # keep inline text",
+      DB_POOL_MAX: "10",
     });
+  });
+
+  it("accepts valid dotenv comments without changing a quoted database URL", () => {
+    for (const value of [
+      `${localUrl} # local database`,
+      `"${localUrl}" # local database`,
+      `'${localUrl}' # local database`,
+    ]) {
+      expect(parseEnvFile(`DATABASE_URL=${value}`).DATABASE_URL).toBe(localUrl);
+    }
+    expect(parseEnvFile('VALUE="text # literal"').VALUE).toBe("text # literal");
   });
 
   it("parses database targets and recognizes only the documented local tuple", () => {
@@ -206,7 +218,72 @@ describe("runInstaller", () => {
     vi.restoreAllMocks();
   });
 
-  it("skips installed dependencies and provisions a local target", async () => {
+  it("pins the validated env-file URL into the migration environment", async () => {
+    const runner = vi.fn<CommandRunner>().mockResolvedValue({ exitCode: 0, signal: null });
+    const options = optionsFor(
+      { [envPath]: `DATABASE_URL=${localUrl}` },
+      { env: {}, commandRunner: runner },
+    );
+    await runInstaller(options);
+    expect(runner.mock.calls.at(-1)?.[2].env.DATABASE_URL).toBe(localUrl);
+  });
+
+  it("pins ORM host, port, database and URL overrides to the validated target", async () => {
+    const runner = vi.fn<CommandRunner>().mockResolvedValue({ exitCode: 0, signal: null });
+    await runInstaller(
+      optionsFor(
+        { [envPath]: `DATABASE_URL=${localUrl}` },
+        {
+          env: {
+            MIKRO_ORM_HOST: "unconfirmed.invalid",
+            MIKRO_ORM_PORT: "7777",
+            MIKRO_ORM_DB_NAME: "unconfirmed",
+            MIKRO_ORM_CLIENT_URL: externalUrl,
+          },
+          commandRunner: runner,
+        },
+      ),
+    );
+    expect(runner.mock.calls.at(-1)?.[2].env).toMatchObject({
+      DATABASE_URL: localUrl,
+      MIKRO_ORM_CLIENT_URL: localUrl,
+      MIKRO_ORM_HOST: "localhost",
+      MIKRO_ORM_PORT: "5432",
+      MIKRO_ORM_DB_NAME: "devmentor",
+    });
+  });
+
+  it("uses the real terminal state by default for interactive confirmation", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+    try {
+      const confirm = vi.fn().mockResolvedValue(true);
+      const result = await runInstaller(
+        optionsFor(
+          { [envPath]: `DATABASE_URL=${externalUrl}` },
+          { env: {}, confirmExternalDatabase: confirm },
+        ),
+      );
+      expect(result.exitCode).toBe(0);
+      expect(confirm).toHaveBeenCalledOnce();
+    } finally {
+      if (descriptor) Object.defineProperty(process.stdin, "isTTY", descriptor);
+      else Reflect.deleteProperty(process.stdin, "isTTY");
+    }
+  });
+
+  it("reconciles dependencies despite an existing hidden lock marker", async () => {
+    const command = successfulCommand();
+    await runInstaller(
+      optionsFor(
+        { [nodeModules]: "", [packageLock]: "", [envPath]: `DATABASE_URL=${localUrl}` },
+        { commandRunner: command.runner },
+      ),
+    );
+    expect(command.calls[0]).toEqual({ command: "npm", args: ["install"] });
+  });
+
+  it("reconciles installed dependencies and provisions a local target", async () => {
     const command = successfulCommand();
     const options = optionsFor(
       { [nodeModules]: "", [packageLock]: "", [envPath]: `DATABASE_URL=${localUrl}` },
@@ -215,6 +292,7 @@ describe("runInstaller", () => {
     const result = await runInstaller(options);
     expect(result).toEqual({ exitCode: 0 });
     expect(command.calls).toEqual([
+      { command: "npm", args: ["install"] },
       { command: "docker", args: ["compose", "up", "-d", "postgres"] },
       { command: "npm", args: ["run", "db:migration:up"] },
     ]);
@@ -239,7 +317,7 @@ describe("runInstaller", () => {
         { commandRunner: command.runner, env: { DATABASE_URL: localUrl } },
       ),
     );
-    expect(command.calls[0]).toEqual({
+    expect(command.calls[1]).toEqual({
       command: "docker",
       args: ["compose", "up", "-d", "postgres"],
     });
@@ -257,7 +335,10 @@ describe("runInstaller", () => {
       ),
     );
     expect(result).toEqual({ exitCode: 0 });
-    expect(command.calls).toEqual([{ command: "npm", args: ["run", "db:migration:up"] }]);
+    expect(command.calls).toEqual([
+      { command: "npm", args: ["install"] },
+      { command: "npm", args: ["run", "db:migration:up"] },
+    ]);
   });
 
   it("prompts for an interactive external target when no opt-in is provided", async () => {
@@ -288,7 +369,7 @@ describe("runInstaller", () => {
       ),
     );
     expect(result).toMatchObject({ exitCode: 1, failedStep: "database target" });
-    expect(command.runner).not.toHaveBeenCalled();
+    expect(command.calls).toEqual([{ command: "npm", args: ["install"] }]);
   });
 
   it("stops before mutating dependent state when confirmation is declined", async () => {
@@ -315,11 +396,25 @@ describe("runInstaller", () => {
         { commandRunner: command.runner, platform: "win32" },
       ),
     );
-    expect(command.calls.map(({ command: name }) => name)).toEqual([
-      "npm.cmd",
-      "docker.cmd",
-      "npm.cmd",
-    ]);
+    expect(command.calls.map(({ command: name }) => name)).toEqual(["npm", "docker.exe", "npm"]);
+  });
+
+  it("stops after an interrupted dependency install even with a zero exit code", async () => {
+    const runner = vi.fn(async (): Promise<CommandResult> => ({ exitCode: 0, signal: "SIGINT" }));
+    const options = optionsFor({}, { commandRunner: runner });
+    expect(await runInstaller(options)).toEqual({ exitCode: 1, failedStep: "dependencies" });
+    expect(options.readinessCheck).not.toHaveBeenCalled();
+  });
+
+  it("reports environment read/write errors without exposing file contents", async () => {
+    const fileSystem = fakeFileSystem({ [envPath]: `DATABASE_URL=${localUrl}` });
+    vi.mocked(fileSystem.read).mockRejectedValue(new Error("private contents"));
+    const options = optionsFor({}, { fileSystem });
+    expect(await runInstaller(options)).toMatchObject({ exitCode: 1, failedStep: "environment" });
+    expect(options.readinessCheck).not.toHaveBeenCalled();
+    expect(vi.mocked(options.writeError).mock.calls.flat().join(" ")).not.toContain(
+      "private contents",
+    );
   });
 
   it("reports missing prerequisites and command failures", async () => {
@@ -521,6 +616,44 @@ describe("runCommand", () => {
       env: process.env,
     });
     expect(missing.exitCode).toBe(1);
+  });
+
+  it("redacts a credential split across child output chunks", async () => {
+    const output: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+    try {
+      await runCommand(
+        process.execPath,
+        [
+          "-e",
+          "process.stdout.write('postgres://user:'); setTimeout(() => process.stdout.write('secret@localhost/db\\n'), 30)",
+        ],
+        { cwd: process.cwd(), env: process.env },
+      );
+    } finally {
+      write.mockRestore();
+    }
+    expect(output.join("")).not.toContain("secret");
+    expect(output.join("")).toContain("[REDACTED]");
+  });
+
+  it("launches npm through its JS entry point without a shell", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "devmentor-npm-"));
+    const entry = join(directory, "npm-cli.cjs");
+    await writeFile(entry, "process.exit(process.argv[2] === 'probe' ? 0 : 7)");
+    try {
+      expect(
+        await runCommand("npm", ["probe"], {
+          cwd: directory,
+          env: { ...process.env, npm_execpath: entry },
+        }),
+      ).toEqual({ exitCode: 0, signal: null });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("forwards termination signals and redacts stderr", async () => {

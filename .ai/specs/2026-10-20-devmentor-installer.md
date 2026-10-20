@@ -2,7 +2,7 @@
 
 ## 📝 TLDR
 
-Developers currently have to execute the DevMentor setup commands from the README one by one. This feature adds a root `npm run setup` command that installs workspace dependencies, preserves or creates local environment configuration, starts or reuses the documented PostgreSQL service, waits until the selected database is reachable, and applies only pending MikroORM migrations. The command exits after provisioning and tells the developer to run `npm run dev`; it never owns a foreground application server.
+Developers currently have to execute the DevMentor setup commands from the README one by one. This feature adds a root `npm run setup` command that installs workspace dependencies, preserves or creates local environment configuration, starts or reuses the documented PostgreSQL service, waits until the selected database is reachable, and invokes the existing migration command. MikroORM applies only pending migrations. The command exits after provisioning and tells the developer to run `npm run dev`; it never owns a foreground application server.
 
 ## 📝 Problem Statement
 
@@ -18,9 +18,9 @@ The installer detects actual state on every run:
 
 - It bootstraps workspace dependencies before loading any workspace package.
 - It creates `packages/app/.env.local` only when it is absent, copying the example without replacing an existing file.
-- It starts the local Compose PostgreSQL service when the selected target is the documented local database, and reuses it when it is already running.
-- It waits for database readiness before invoking the migration command.
-- It relies on MikroORM's migration ledger so an already-migrated database is a no-op and a database with new migrations receives only those migrations.
+- It starts or reuses the local Compose PostgreSQL service when the selected target is the documented local database.
+- It waits for database readiness by opening a TCP socket to the parsed host and port, with a 60-second timeout and 500-millisecond polling interval, before invoking the migration command. This uses only Node built-ins; successful TCP reachability is followed by the migration command's authenticated connection check.
+- It always invokes the existing `npm run db:migration:up` after readiness. MikroORM's migration ledger makes an already-migrated database a no-op and applies only newer migrations; the installer maintains no duplicate ledger or completion marker.
 - It reports a resumable failure and stops dependent steps on the first failed prerequisite.
 - It exits with a successful handoff message rather than starting `npm run dev`.
 
@@ -33,12 +33,14 @@ Common bootstrap tools such as framework starters and ORM CLIs separate provisio
 - **Lifecycle:** setup provisions dependencies, configuration, database, and migrations, then exits with `npm run dev` as the next command. This has the smallest operational footprint and avoids duplicate foreground servers on repeat runs.
 - **Existing database target:** an interactive confirmation is required for a non-default or external `DATABASE_URL`; non-interactive use must provide an explicit opt-in variable. This protects external data while keeping CI and scripted setup deterministic.
 - **Dependency bootstrap:** the root entry point uses only Node.js built-ins and Node 22.17's TypeScript stripping, so `npm run setup` can invoke `npm install` before workspace dependencies exist. No new package is introduced.
-- **Readiness strategy:** the installer polls the selected PostgreSQL endpoint with a bounded timeout before migrations and prints remediation without exposing the URL. It does not add a second database client library.
+- **Readiness strategy:** the installer parses the effective URL, opens a TCP socket to its host and port, polls every 500 milliseconds for at most 60 seconds, and then delegates authentication to MikroORM. It does not add a second database client library.
 - **Migration failures:** setup stops immediately and returns nonzero; a later run invokes the same migration command and lets MikroORM determine pending work. The installer does not maintain a second completion marker.
 
 ## 📝 Architecture
 
-The new root command is a thin CLI boundary in `scripts/setup.ts). Its dependency-free orchestration and state model live in `packages/core/src/setup/installer.ts), which exposes testable functions and accepts filesystem, environment, process, clock, and readiness seams. The module has no React, Next.js, MikroORM, or Effect dependency.
+The new root command is a thin CLI boundary in `scripts/setup.ts`. Its dependency-free orchestration and state model live in `packages/core/src/setup/installer.ts`, which exposes testable functions and accepts filesystem, environment, process, clock, and readiness seams. The module has no React, Next.js, MikroORM, or Effect dependency.
+
+The static entry point imports only Node built-ins, runs `npm install` first, and dynamically imports the core source module afterward. The root script imports that module by relative source path rather than through a workspace package export, so it remains runnable before dependencies exist. The core module itself also imports only Node built-ins.
 
 The runtime flow is:
 
@@ -66,7 +68,7 @@ No application entity, database table, or migration is added. The installer read
 
 ### Root command
 
-- `npm run setup` runs `node --experimental-strip-types scripts/setup.ts`.
+- `npm run setup` runs `node --experimental-strip-types scripts/setup.ts`; the root script performs the built-in-only dependency bootstrap before dynamically importing the installer module.
 - Exit code `0`: dependencies, environment, selected database, and all currently pending migrations are ready; the output includes the explicit next command.
 - Exit code nonzero: a prerequisite failed or a required confirmation was not supplied. Dependent work is skipped and output includes the failed step and a remediation.
 - Existing process environment variables take precedence over env files, matching the repository configuration contract.
@@ -76,9 +78,10 @@ No application entity, database table, or migration is added. The installer read
 
 - Missing `packages/app/.env.local`: copy `packages/app/.env.example` and report that it was created.
 - Existing `.env.local`: preserve byte-for-byte and report that it was reused.
-- Default local target: the documented Compose database from the example, or an equivalent loopback target selected explicitly by the developer.
-- External target: require an interactive yes/no confirmation or an explicit setup opt-in variable whose value is documented in the README. Declining or missing confirmation exits before any migration command.
-- Readiness timeout and polling interval are constants with tests; no user-facing secret is included in timeout errors.
+- Effective configuration: process `DATABASE_URL` wins; otherwise `packages/app/.env.local` is read; when that file is absent, the example is copied first and then read. A malformed URL stops before Docker, readiness polling, or migrations.
+- Default local target: host `localhost`, `127.0.0.1`, or `::1`, port `5432`, database `devmentor`, and the documented local Compose service. The username and password may differ, but a non-default host, port, or database is external for confirmation purposes.
+- External target: require an interactive yes/no confirmation, or `DEVMENTOR_SETUP_ALLOW_EXTERNAL_DATABASE=1` in a non-interactive process. Any other value is treated as no confirmation. Declining or missing confirmation exits before Docker, readiness polling, or migration.
+- Readiness uses `node:net` TCP connection attempts to the parsed host and port, not a database client. Constants are `60_000` milliseconds total and `500` milliseconds between attempts; timeout output includes only a redacted host/port description.
 
 ## 📝 UI/UX
 
@@ -95,19 +98,19 @@ There is no application UI change. The terminal experience is the user-facing su
 - Node.js below the documented minimum: stop before mutating project state with an actionable version message.
 - `npm install` fails: do not start Docker or migrate; return its nonzero status.
 - The example env file or parent directory is missing: stop and identify the repository path.
-- `.env.local` is present but invalid: preserve it and let the existing migration/config command report the configuration problem without exposing values.
+- `.env.local` is present but invalid: preserve it, report a redacted configuration error, and stop before Docker, readiness polling, or migration.
 - Docker is unavailable, Compose fails, or PostgreSQL never becomes ready: stop before migration and explain the required service/action.
 - An external database is selected without confirmation: stop before connecting for migration.
 - A migration fails: preserve all local state, return nonzero, and permit a later run to retry pending migrations.
 - A new migration is added after a successful run: the next run does not trust a marker; it waits for the database and invokes the existing migration ledger.
-- Ctrl-C or another interruption: return nonzero and leave files, containers, volumes, and migration state intact.
+- Ctrl-C or another interruption: forward termination to the active child process, return nonzero, and perform no cleanup/reset. A migration already running owns its transaction behavior; the installer does not claim that an externally interrupted child can never have committed work.
 - A foreground `npm run dev` is already running: setup never starts a second one.
 
 ## 📝 Risks & Impact Review
 
-The command gains permission to start the repository's local Compose service and to invoke migrations, so an incorrect target could affect developer data. The explicit external-target confirmation, environment precedence, redacted output, and no-reset policy limit that risk. The implementation changes no HTTP, package export, schema, or runtime configuration contract; it adds one root script and one CLI-only module.
+The command gains permission to start the repository's local Compose service and to invoke migrations, so an incorrect target could affect developer data. The exact local-target tuple, explicit external-target confirmation, environment precedence, redacted output, and no-reset policy limit that risk. The implementation changes no HTTP, package export, schema, or runtime configuration contract; it adds one root script and one CLI-only module.
 
-The installer should be rollback-safe by deletion of the additive script and entry point. It must not remove `.env.local`, stop or recreate containers, delete volumes, or edit applied migrations. Testing uses a task-owned disposable PostgreSQL database; the shared development database is never used by tests.
+The installer should be rollback-safe by deletion of the additive script and entry point. It must not remove `.env.local`, run `docker compose down`, delete volumes, or edit applied migrations. `docker compose up -d postgres` is allowed for an absent, stopped, or running local service; Compose may recreate the container when its declared configuration has drifted, but the named data volume is retained and no reset command is issued. Testing uses a task-owned disposable PostgreSQL database; the shared development database is never used by tests.
 
 ## 📋 Phasing
 
@@ -127,14 +130,14 @@ The installer should be rollback-safe by deletion of the additive script and ent
 
 4. Implement environment-target resolution and explicit confirmation for external databases without changing process-variable precedence.
 5. Implement Compose start/reuse and bounded PostgreSQL readiness polling without printing credentials or destructive commands.
-6. Delegate migrations to the existing root migration script and add tests proving the migration step is skipped only when the existing ledger says there is no pending work, while later migrations remain discoverable.
+6. Always delegate migrations to the existing root migration script after readiness; add tests proving a second run is harmless and a later migration remains discoverable through MikroORM's ledger.
 
 ### Phase 3: Documentation and integration proof
 
 7. Update README prerequisites, automated setup, repeat/recovery behavior, external-database confirmation, app handoff, manual alternative, and scripts table.
-8. Add a disposable-database integration smoke test that runs setup twice, inserts a row between runs, and proves the row survives while the migration ledger does not reapply completed migrations.
+8. Add a disposable-database integration smoke test in a temporary project fixture with an injected `DATABASE_URL`: run the real orchestration twice, insert a row between runs, and prove the row survives while the migration ledger does not reapply completed migrations. The fixture owns its temporary env file and database/container identity and removes only its temporary files and resources in teardown.
 9. Run the repository validation gate and applicable integration/E2E checks; record evidence in the run log and PR summary.
 
 ## 🧪 Review limits
 
-This autonomous design uses the repository's current README, Compose file, environment example, MikroORM CLI config, package scripts, compatibility contract, and test configuration. It does not assume a production deployment workflow or a new product surface. The implementation must validate the exact Node 22.17 TypeScript entry-point behavior in CI and keep the integration smoke test isolated from any developer database.
+This autonomous design uses the repository's current README, Compose file, environment example, MikroORM CLI config, package scripts, compatibility contract, and test configuration. It does not assume a production deployment workflow or a new product surface. Supported hosts are POSIX and Windows systems with Node.js >=22.17, npm, and Docker Compose v2 for the default local target; child commands use direct argument arrays (`npm.cmd`/`docker.cmd` on Windows) and no shell interpolation. The implementation must validate the exact Node 22.17 TypeScript entry-point behavior in CI, forward child interruption, redact delegated output, and keep the integration smoke test isolated from any developer database.

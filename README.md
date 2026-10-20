@@ -17,7 +17,19 @@ DevMentor is a Next.js application in an npm-workspaces monorepo.
 
 ## Getting started
 
-Requirements: Node.js >= 22.17, npm, PostgreSQL (or Docker).
+Requirements: Node.js >= 22.17, npm, and either Docker Compose v2 or an existing PostgreSQL server.
+
+For the automated path, run setup from the repository root:
+
+```bash
+npm run setup
+```
+
+It installs dependencies when they are missing, creates `packages/app/.env.local` only when it does not exist, starts or reuses the local PostgreSQL service, waits for the selected host and port, and applies pending migrations. A second or interrupted run checks the actual files, service reachability, and MikroORM migration ledger again; it does not overwrite configuration, reset volumes, or reseed data. Setup stops with a nonzero status when a prerequisite fails, so correct the reported problem and rerun it. It finishes with the explicit handoff `npm run dev` and does not start a foreground server itself.
+
+If `DATABASE_URL` points outside the documented local target (`localhost`/loopback, port `5432`, database `devmentor`), setup asks for confirmation in an interactive terminal. For a non-interactive run, set `DEVMENTOR_SETUP_ALLOW_EXTERNAL_DATABASE=1` after checking the target. The value is never printed.
+
+The manual procedure remains available when you want to choose each step:
 
 ```bash
 npm install
@@ -44,6 +56,7 @@ npm run dev
 | Script | What it does |
 | --- | --- |
 | `npm run dev` / `build` / `start` | Next.js dev server / production build / production server (forwarded to `@devmentor/app`) |
+| `npm run setup` | Install dependencies, preserve/create local env, start or confirm PostgreSQL, wait for readiness, and apply pending migrations |
 | `npm run lint` / `format` | ESLint + Prettier check across the repo / apply Prettier |
 | `npm run typecheck` | `tsc --noEmit` + Effect language-service diagnostics in every package |
 | `npm test` | Unit and service tests (Vitest); fails below 100% coverage (report in `coverage/`) |

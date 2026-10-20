@@ -12,6 +12,7 @@
     "dev": "npm run dev -w @devmentor/app --",
     "build": "npm run build -w @devmentor/app",
     "start": "npm run start -w @devmentor/app --",
+    "setup": "node --experimental-strip-types scripts/setup.mts",
     "lint": "eslint && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",

@@ -38,7 +38,7 @@ Common bootstrap tools such as framework starters and ORM CLIs separate provisio
 
 ## 📝 Architecture
 
-The new root command is a thin CLI boundary in `scripts/setup.ts`. Its dependency-free orchestration and state model live in `packages/core/src/setup/installer.ts`, which exposes testable functions and accepts filesystem, environment, process, clock, and readiness seams. The module has no React, Next.js, MikroORM, or Effect dependency.
+The new root command is a thin CLI boundary in `scripts/setup.mts`. Its dependency-free orchestration and state model live in `packages/core/src/setup/installer.ts`, which exposes testable functions and accepts filesystem, environment, process, clock, and readiness seams. The module has no React, Next.js, MikroORM, or Effect dependency.
 
 The static entry point imports only Node built-ins, runs `npm install` first, and dynamically imports the core source module afterward. The root script imports that module by relative source path rather than through a workspace package export, so it remains runnable before dependencies exist. The core module itself also imports only Node built-ins.
 
@@ -68,7 +68,7 @@ No application entity, database table, or migration is added. The installer read
 
 ### Root command
 
-- `npm run setup` runs `node --experimental-strip-types scripts/setup.ts`; the root script performs the built-in-only dependency bootstrap before dynamically importing the installer module.
+- `npm run setup` runs `node --experimental-strip-types scripts/setup.mts`; the root script performs the built-in-only dependency bootstrap before importing the installer module.
 - Exit code `0`: dependencies, environment, selected database, and all currently pending migrations are ready; the output includes the explicit next command.
 - Exit code nonzero: a prerequisite failed or a required confirmation was not supplied. Dependent work is skipped and output includes the failed step and a remediation.
 - Existing process environment variables take precedence over env files, matching the repository configuration contract.
@@ -122,7 +122,7 @@ The installer should be rollback-safe by deletion of the additive script and ent
 
 ### Phase 1: Bootstrap and orchestration
 
-1. Add the root `setup` npm script and `scripts/setup.ts`, using only Node built-ins so it can run before workspace dependencies are installed.
+1. Add the root `setup` npm script and `scripts/setup.mts`, using only Node built-ins so it can run before workspace dependencies are installed.
 2. Add the installer orchestration module with injected filesystem/process/environment seams, step results, nonzero failure propagation, Node version validation, and redacted output.
 3. Add unit tests for fresh setup, repeat setup, partial setup, interrupted/failed commands, missing prerequisites, and preserved environment contents.
 

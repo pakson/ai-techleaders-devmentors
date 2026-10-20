@@ -138,4 +138,3 @@ The installer should be rollback-safe by deletion of the additive script and ent
 ## 🧪 Review limits
 
 This autonomous design uses the repository's current README, Compose file, environment example, MikroORM CLI config, package scripts, compatibility contract, and test configuration. It does not assume a production deployment workflow or a new product surface. The implementation must validate the exact Node 22.17 TypeScript entry-point behavior in CI and keep the integration smoke test isolated from any developer database.
-

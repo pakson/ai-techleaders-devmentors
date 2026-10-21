@@ -1,5 +1,9 @@
 # Idempotent DevMentor installer
 
+- Status: **implemented 2026-10-21**.
+- Verification: commit `04a54f0` passed all eight required checks, including exact Node 22.17 CLI compatibility on Linux and Windows: [CI run](https://github.com/pakson/ai-techleaders-devmentors/actions/runs/39518215501).
+- Implementation and review fixes: [run log](../../runs/2026-10-20-pr7-installer-fixes.md).
+
 ## 📝 TLDR
 
 Developers currently have to execute the DevMentor setup commands from the README one by one. This feature adds a root `npm run setup` command that installs workspace dependencies, preserves or creates local environment configuration, starts or reuses the documented PostgreSQL service, waits until the selected database is reachable, and invokes the existing migration command. MikroORM applies only pending migrations. The command exits after provisioning and tells the developer to run `npm run dev`; it never owns a foreground application server.

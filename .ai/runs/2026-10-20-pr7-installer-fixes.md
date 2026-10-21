@@ -68,3 +68,11 @@ Status: ready for om-open-pr; issue #5 claim retained by om-fix as required. Fix
 ## Publication authorized
 
 The maintainer requested committing these changes to existing PR #7. Remote PR head was rechecked at b248949; no other changes have been added. Publishing with a normal fast-forward push to feat/issue-5-devmentor-installer, reusing PR #7. The configured local gate and applicable integration/E2E checks passed on these production changes. The approved compatibility requirements will be added to the freshly read ruleset after workflow publication; all existing requirements remain intact. Windows and current-head CI are still pending until GitHub runs them.
+
+## Published and verified — 2026-10-21
+
+- Published fix commit `04a54f07f406e58c1f78448793541d7230d253bc` to PR #7 with a normal fast-forward push. Issue #5's om-fix lock released.
+- Applied the maintainer-approved ruleset update after workflow publication. Read-back comparison verified all original protection rules, branch-update policy and six required checks were preserved; added only the Linux and Windows installer compatibility requirements.
+- CI run https://github.com/pakson/ai-techleaders-devmentors/actions/runs/39518215501 completed successfully at that exact head. All eight checks finished green: lint, typecheck, 100% unit coverage, build, Testcontainers integration, agent-browser E2E, and exact Node 22.17 compatibility on Linux and Windows.
+- The installer specification is fully implemented and verified; moved it to `.ai/specs/implemented/2026-10-20-devmentor-installer.md` and updated the implementation run reference. The original 2026-10-20 creation filename is preserved.
+- This lifecycle-only documentation commit will receive its own current-head CI verification. No merge performed. Remaining after green checks: maintainer review/sign-off and merging PR #7; issue #5 closes on merge.

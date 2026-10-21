@@ -4,7 +4,7 @@
 - Goal: implement issue #5 as an idempotent root `npm run setup` command that safely provisions dependencies, local configuration, PostgreSQL readiness, and pending migrations.
 - Scope: root setup entry point, framework-agnostic installer orchestration, focused unit/integration coverage, and README documentation.
 - Non-goals: application features, production deployment, database reset/reseed, system-level tool installation, CI/ruleset changes, and starting a foreground dev server.
-- Source doc: .ai/specs/2026-10-20-devmentor-installer.md
+- Source doc: .ai/specs/implemented/2026-10-20-devmentor-installer.md
 
 ## Risks
 

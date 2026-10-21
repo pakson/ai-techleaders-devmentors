@@ -63,6 +63,13 @@ describe("mapCause / errorToResponse", () => {
     });
   });
 
+  it("maps a typed failure cause to its public error response", () => {
+    expect(mapCause(Cause.fail(new NotFound({ resource: "session" })))).toEqual({
+      status: 404,
+      error: { code: "not_found", message: "session not found" },
+    });
+  });
+
   it("treats expected failures as not unexpected", () => {
     expect(isUnexpected(Cause.fail(new NotFound({ resource: "session" })))).toBe(false);
     expect(isUnexpected(Cause.fail(new DbError({ cause: null })))).toBe(true);

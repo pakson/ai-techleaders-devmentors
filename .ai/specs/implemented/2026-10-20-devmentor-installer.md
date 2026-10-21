@@ -1,5 +1,9 @@
 # Idempotent DevMentor installer
 
+- Status: **implemented 2026-10-21**.
+- Verification: commit `04a54f0` passed all eight required checks, including exact Node 22.17 CLI compatibility on Linux and Windows: [CI run](https://github.com/pakson/ai-techleaders-devmentors/actions/runs/39518215501).
+- Implementation and review fixes: [run log](../../runs/2026-10-20-pr7-installer-fixes.md).
+
 ## 📝 TLDR
 
 Developers currently have to execute the DevMentor setup commands from the README one by one. This feature adds a root `npm run setup` command that installs workspace dependencies, preserves or creates local environment configuration, starts or reuses the documented PostgreSQL service, waits until the selected database is reachable, and invokes the existing migration command. MikroORM applies only pending migrations. The command exits after provisioning and tells the developer to run `npm run dev`; it never owns a foreground application server.
@@ -16,7 +20,7 @@ Add an additive root `setup` npm script backed by a dependency-free TypeScript C
 
 The installer detects actual state on every run:
 
-- It bootstraps workspace dependencies before loading any workspace package.
+- It reconciles workspace dependencies with npm on every run, before loading any third-party workspace dependency. A hidden lockfile alone is not treated as proof of complete dependencies.
 - It creates `packages/app/.env.local` only when it is absent, copying the example without replacing an existing file.
 - It starts or reuses the local Compose PostgreSQL service when the selected target is the documented local database.
 - It waits for database readiness by opening a TCP socket to the parsed host and port, with a 60-second timeout and 500-millisecond polling interval, before invoking the migration command. This uses only Node built-ins; successful TCP reachability is followed by the migration command's authenticated connection check.
@@ -40,7 +44,7 @@ Common bootstrap tools such as framework starters and ORM CLIs separate provisio
 
 The new root command is a thin CLI boundary in `scripts/setup.mts`. Its dependency-free orchestration and state model live in `packages/core/src/setup/installer.ts`, which exposes testable functions and accepts filesystem, environment, process, clock, and readiness seams. The module has no React, Next.js, MikroORM, or Effect dependency.
 
-The static entry point imports only Node built-ins, runs `npm install` first, and dynamically imports the core source module afterward. The root script imports that module by relative source path rather than through a workspace package export, so it remains runnable before dependencies exist. The core module itself also imports only Node built-ins.
+The static entry point imports Node built-ins and the built-in-only core source module; orchestration runs `npm install` before any command needs third-party dependencies. The root script imports that module by relative source path rather than through a workspace package export, so it remains runnable before dependencies exist. The core module itself also imports only Node built-ins.
 
 The runtime flow is:
 
@@ -68,7 +72,7 @@ No application entity, database table, or migration is added. The installer read
 
 ### Root command
 
-- `npm run setup` runs `node --experimental-strip-types scripts/setup.mts`; the root script performs the built-in-only dependency bootstrap before importing the installer module.
+- `npm run setup` runs `node --experimental-strip-types scripts/setup.mts`; the built-in-only installer reconciles dependencies before executing commands that need workspace packages.
 - Exit code `0`: dependencies, environment, selected database, and all currently pending migrations are ready; the output includes the explicit next command.
 - Exit code nonzero: a prerequisite failed or a required confirmation was not supplied. Dependent work is skipped and output includes the failed step and a remediation.
 - Existing process environment variables take precedence over env files, matching the repository configuration contract.
@@ -140,4 +144,6 @@ The installer should be rollback-safe by deletion of the additive script and ent
 
 ## 🧪 Review limits
 
-This autonomous design uses the repository's current README, Compose file, environment example, MikroORM CLI config, package scripts, compatibility contract, and test configuration. It does not assume a production deployment workflow or a new product surface. Supported hosts are POSIX and Windows systems with Node.js >=22.17, npm, and Docker Compose v2 for the default local target; child commands use direct argument arrays (`npm.cmd`/`docker.cmd` on Windows) and no shell interpolation. The implementation must validate the exact Node 22.17 TypeScript entry-point behavior in CI, forward child interruption, redact delegated output, and keep the integration smoke test isolated from any developer database.
+This autonomous design uses the repository's current README, Compose file, environment example, MikroORM CLI config, package scripts, compatibility contract, and test configuration. It does not assume a production deployment workflow or a new product surface. Review corrections authorized 2026-10-20: migrate with the exact validated `DATABASE_URL` and matching MikroORM host/port/database overrides pinned into the child environment; default interactive detection to the real terminal; redact complete output lines; let npm reconcile dependency state on every run; add minimum-version/Windows compatibility checks with matching required-check updates at publication. This supersedes the issue's original exclusion of CI/ruleset changes, explicitly approved by the maintainer during this fix.
+
+Supported hosts are POSIX and Windows systems with Node.js >=22.17, npm, and Docker Compose v2 for the default local target; child commands use direct argument arrays (npm's JS entry point through `process.execPath`, and `docker.exe` on Windows) and no shell interpolation. The implementation must validate the exact Node 22.17 TypeScript entry-point behavior in CI, forward child interruption, redact delegated output, and keep the integration smoke test isolated from any developer database.

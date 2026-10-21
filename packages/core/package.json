@@ -9,6 +9,7 @@
     "./di": "./src/di/index.ts",
     "./errors": "./src/errors.ts",
     "./http": "./src/http.ts",
+    "./setup": "./src/setup/installer.ts",
     "./schemas": "./src/schemas.ts",
     "./validation": "./src/validation.ts"
   },

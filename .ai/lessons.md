@@ -30,6 +30,9 @@ Index of long-term learnings recorded by humans and LLMs. Read this file before 
 
 <!-- Format: - [YYYY-MM-DD slug](lessons/YYYY-MM-DD-slug.md) — one-line summary -->
 
+- [2026-10-20 agent-verdict-and-github-approval](lessons/2026-10-20-agent-verdict-and-github-approval.md) — distinguish agent verdict, native review state and effective branch requirements; verify live draft/head state
+- [2026-10-20 shell-body-escaping](lessons/2026-10-20-shell-body-escaping.md) — never interpolate JSON.stringify output into shell commands when Markdown backticks can trigger command substitution; use a body file
+
 - [2026-10-20 pipeline-gates-and-template-preamble](lessons/2026-10-20-pipeline-gates-and-template-preamble.md) — keep integration/E2E in CI; verify generated docs start at their intended heading with no template residue
 - [2026-10-20 openmercato-skill-lint](lessons/2026-10-20-openmercato-skill-lint.md) — run the repository formatter on installed OpenMercato scripts before committing them
 - [2026-10-19 junit-reporter-holds-output-file-open](lessons/2026-10-19-junit-reporter-holds-output-file-open.md) — don't delete a reporter's output dir from global setup; verify evidence files, not log lines

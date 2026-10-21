@@ -27,6 +27,21 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  installer-compatibility:
+    name: installer compatibility (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22.17.0 }
+      # Runs the actual TypeScript CLI without workspace dependencies installed.
+      # Includes a real npm JS subprocess on both platforms; fake only provisioning.
+      - run: node --experimental-strip-types --test scripts/setup-smoke.mts
+
   # 1. Static checks
   lint:
     name: lint

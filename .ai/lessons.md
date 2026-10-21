@@ -28,6 +28,8 @@ Index of long-term learnings recorded by humans and LLMs. Read this file before 
 
 ## Index
 
+- [2026-10-20 installer-validated-target](lessons/2026-10-20-installer-validated-target.md) — pin checked database targets into child environments; redact complete lines and reconcile actual dependencies
+
 <!-- Format: - [YYYY-MM-DD slug](lessons/YYYY-MM-DD-slug.md) — one-line summary -->
 
 - [2026-10-20 agent-verdict-and-github-approval](lessons/2026-10-20-agent-verdict-and-github-approval.md) — distinguish agent verdict, native review state and effective branch requirements; verify live draft/head state

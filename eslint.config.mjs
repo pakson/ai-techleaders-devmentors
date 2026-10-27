@@ -102,7 +102,17 @@ const eslintConfig = defineConfig([
       "react-hooks/rules-of-hooks": "off",
     },
   },
-  globalIgnores(["**/.next/**", "**/out/**", "**/build/**", "**/next-env.d.ts", "coverage/**"]),
+  // Installed agent skills and their assets are vendored from open-mercato/skills and
+  // re-synced by `npx skills add`; lint them upstream, not here.
+  globalIgnores([
+    "**/.next/**",
+    "**/out/**",
+    "**/build/**",
+    "**/next-env.d.ts",
+    "coverage/**",
+    ".agents/**",
+    ".claude/**",
+  ]),
 ]);
 
 export default eslintConfig;

@@ -7,3 +7,6 @@ packages/ui/src/styles/
 **/.next/
 **/next-env.d.ts
 .ai/
+# Installed agent skills and their assets are vendored; see eslint.config.mjs.
+.agents/
+.claude/

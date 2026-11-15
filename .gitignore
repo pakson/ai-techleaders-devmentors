@@ -48,3 +48,8 @@ next-env.d.ts
 .ai/qa/artifacts_*/
 .ai/qa/test-env.json
 .ai/qa/test-env.env
+
+# Local merge-queue scheduling runs
+.ai/runs/merge-buddy/
+.ai/meta/merge-buddy.json
+.ai/meta/merge-buddy-merged-*.jsonl
